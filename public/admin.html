@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#0f172a">
+  <title>Admin – Løftebukk</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Login page (shown when not authenticated) -->
+  <div id="login-page" style="display:none">
+    <div class="login-wrap">
+      <div class="login-card">
+        <div class="login-icon">🔐</div>
+        <h1>Admin-innlogging</h1>
+        <p>Løftebukk-booking — mekkeklubben</p>
+        <div class="alert alert-error" id="login-error"></div>
+        <form id="login-form">
+          <div class="form-group" style="text-align:left">
+            <label for="password">Passord</label>
+            <input type="password" id="password" autocomplete="current-password" placeholder="Skriv inn admin-passord">
+          </div>
+          <button type="submit" class="btn btn-primary btn-full">Logg inn</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Admin panel (shown when authenticated) -->
+  <div id="admin-page" style="display:none">
+    <div class="admin-header">
+      <h1>🔧 Admin-panel</h1>
+      <button class="btn btn-ghost btn-sm" id="logout-btn" style="color:white;border-color:rgba(255,255,255,.3)">Logg ut</button>
+    </div>
+
+    <div class="admin-main">
+      <div class="alert alert-error" id="admin-error"></div>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" data-tab="pending">
+          Til behandling <span class="tab-badge" id="badge-pending">0</span>
+        </button>
+        <button class="tab-btn" data-tab="approved">
+          Godkjent <span class="tab-badge" id="badge-approved">0</span>
+        </button>
+        <button class="tab-btn" data-tab="rejected">
+          Avvist <span class="tab-badge" id="badge-rejected">0</span>
+        </button>
+      </div>
+
+      <div id="bookings-list"></div>
+    </div>
+  </div>
+
+  <script src="admin.js"></script>
+</body>
+</html>
