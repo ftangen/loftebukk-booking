@@ -13,8 +13,14 @@ module.exports = {
     env: {
       NODE_ENV: 'production',
       PORT: 3000,
+      SITE_URL: 'https://booking.10w-30mc.no',
       ADMIN_PASSWORD: 'bytt-til-ditt-passord',
       SESSION_SECRET: 'langt-tilfeldig-passord-minst-32-tegn',
+      // E-postvarsler via Google Workspace
+      // Lag App-passord på: myaccount.google.com → Sikkerhet → App-passord
+      SMTP_USER: 'din@adresse.no',
+      SMTP_PASS: 'xxxx-xxxx-xxxx-xxxx',
+      ADMIN_EMAIL: 'admin@adresse.no',
     },
   }],
 };

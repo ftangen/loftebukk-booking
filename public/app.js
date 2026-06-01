@@ -244,17 +244,22 @@
 
     const name = document.getElementById('f-name').value.trim();
     const phone = document.getElementById('f-phone').value.trim();
+    const email = document.getElementById('f-email').value.trim();
     const plate = document.getElementById('f-plate').value.trim().toUpperCase();
     const startTime = fStart.value;
     const endTime = fEnd.value;
     const notes = document.getElementById('f-notes').value.trim();
 
-    if (!name || !phone || !plate || !startTime || !endTime || !notes) {
-      showError('Alle felt merket med * må fylles ut — inkludert hva som skal gjøres med bilen.');
+    if (!name || !phone || !email || !plate || !startTime || !endTime || !notes) {
+      showError('Alle felt merket med * må fylles ut.');
       return;
     }
     if (phone.replace(/\D/g, '').length < 8) {
       showError('Skriv inn et gyldig telefonnummer (minst 8 siffer).');
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      showError('Skriv inn en gyldig e-postadresse.');
       return;
     }
 
@@ -266,7 +271,7 @@
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, license_plate: plate, date: selectedDate, start_time: startTime, end_time: endTime, notes }),
+        body: JSON.stringify({ name, phone, email, license_plate: plate, date: selectedDate, start_time: startTime, end_time: endTime, notes }),
       });
       const data = await res.json();
       if (!res.ok) {

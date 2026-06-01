@@ -29,11 +29,11 @@ function getAllBookings() {
   return [...bookings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
-function createBooking({ name, phone, license_plate, date, start_time, end_time, notes }) {
+function createBooking({ name, phone, email, license_plate, date, start_time, end_time, notes }) {
   const db = readDb();
   const booking = {
     id: db.nextId++,
-    name, phone, license_plate, date, start_time, end_time,
+    name, phone, email, license_plate, date, start_time, end_time,
     notes: notes || '',
     status: 'pending',
     created_at: new Date().toISOString(),

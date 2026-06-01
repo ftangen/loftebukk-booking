@@ -138,6 +138,7 @@
           <span>📅 ${dateStr}</span>
           <span>🕐 ${b.start_time} – ${b.end_time}</span>
           <span>📞 ${escHtml(b.phone)}</span>
+          <span>✉️ ${escHtml(b.email || '—')}</span>
           <span class="text-slate-400 text-xs self-center">Sendt ${createdAt}</span>
         </div>
 

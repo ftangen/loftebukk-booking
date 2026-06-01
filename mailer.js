@@ -1,0 +1,175 @@
+const nodemailer = require('nodemailer');
+
+const SMTP_USER = process.env.SMTP_USER;
+const SMTP_PASS = process.env.SMTP_PASS;
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
+const SITE_URL = (process.env.SITE_URL || 'http://localhost:3000').replace(/\/$/, '');
+
+const NO_MONTHS = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+const NO_DAYS   = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lørdag'];
+
+function formatDate(dateStr) {
+  const d = new Date(dateStr + 'T12:00:00');
+  return `${NO_DAYS[d.getDay()]} ${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function getTransporter() {
+  if (!SMTP_USER || !SMTP_PASS) return null;
+  return nodemailer.createTransport({
+    host: 'smtp.gmail.com',
+    port: 587,
+    secure: false,
+    auth: { user: SMTP_USER, pass: SMTP_PASS },
+  });
+}
+
+async function send(to, subject, html) {
+  const t = getTransporter();
+  if (!t) return;
+  try {
+    await t.sendMail({
+      from: `"Løftebukk-booking 🔧" <${SMTP_USER}>`,
+      to,
+      subject,
+      html,
+    });
+  } catch (err) {
+    console.error('[mailer] Feil ved sending av e-post:', err.message);
+  }
+}
+
+// ── E-post til admin: ny booking-forespørsel ──────────
+async function notifyAdminNewBooking(booking) {
+  if (!ADMIN_EMAIL) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    ADMIN_EMAIL,
+    `🔧 Ny booking-forespørsel fra ${booking.name}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">🔧</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Ny booking-forespørsel</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:7px 0;color:#64748b;width:110px;">Navn</td>        <td style="padding:7px 0;font-weight:700;">${esc(booking.name)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Telefon</td>    <td style="padding:7px 0;">${esc(booking.phone)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">E-post</td>     <td style="padding:7px 0;">${esc(booking.email)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Dato</td>       <td style="padding:7px 0;font-weight:700;">${dateStr}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>        <td style="padding:7px 0;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Skiltnummer</td><td style="padding:7px 0;font-family:monospace;font-weight:700;letter-spacing:.06em;">${esc(booking.license_plate)}</td></tr>
+      </table>
+
+      <div style="margin:16px 0 20px;padding:12px 16px;background:#f8fafc;border-radius:8px;border-left:3px solid #1d4ed8;">
+        <p style="margin:0 0 4px;color:#64748b;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Hva skal gjøres</p>
+        <p style="margin:0;font-size:14px;">${esc(booking.notes)}</p>
+      </div>
+
+      <a href="${SITE_URL}/admin.html" style="display:inline-block;padding:12px 22px;background:#1d4ed8;color:white;text-decoration:none;border-radius:8px;font-weight:700;font-size:14px;">
+        Gå til admin-panelet →
+      </a>
+    </div>
+
+    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
+      Sendt automatisk av Løftebukk-booking
+    </div>
+  </div>
+</body></html>`
+  );
+}
+
+// ── E-post til frivillig: godkjent ────────────────────
+async function notifyVolunteerApproved(booking) {
+  if (!booking.email) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    booking.email,
+    `✅ Booking godkjent — ${dateStr}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#14532d,#16a34a);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">✅</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Booking godkjent!</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+      <p style="margin:0 0 20px;font-size:15px;">Hei ${esc(booking.name)}! 👋<br>
+      Bookingen din er godkjent. Vi gleder oss til å se deg!</p>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:5px 0;color:#166534;width:110px;">Dato</td>        <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Tid</td>         <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Bil</td>         <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Hva</td>         <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
+        </table>
+      </div>
+
+      <p style="margin:0;font-size:14px;color:#64748b;">
+        Husk å rydde etter deg og legg nøklene tilbake på plass. God mekking! 🔧
+      </p>
+    </div>
+
+    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
+      Sendt automatisk av Løftebukk-booking
+    </div>
+  </div>
+</body></html>`
+  );
+}
+
+// ── E-post til frivillig: avvist ──────────────────────
+async function notifyVolunteerRejected(booking) {
+  if (!booking.email) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    booking.email,
+    `❌ Booking avvist — ${dateStr}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">❌</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Booking avvist</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+      <p style="margin:0 0 16px;font-size:15px;">Hei ${esc(booking.name)}!<br>
+      Dessverre kunne ikke bookingen din godkjennes denne gangen.</p>
+
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:14px;color:#7f1d1d;">
+        <strong>${dateStr}</strong>, ${esc(booking.start_time)} – ${esc(booking.end_time)}
+      </div>
+
+      <p style="margin:0;font-size:14px;color:#64748b;">
+        Prøv gjerne å booke en annen tid på
+        <a href="${SITE_URL}" style="color:#1d4ed8;">booking-siden</a>.
+      </p>
+    </div>
+
+    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
+      Sendt automatisk av Løftebukk-booking
+    </div>
+  </div>
+</body></html>`
+  );
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+module.exports = { notifyAdminNewBooking, notifyVolunteerApproved, notifyVolunteerRejected };

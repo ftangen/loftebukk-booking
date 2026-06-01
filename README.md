@@ -223,10 +223,25 @@ pm2 restart loftebukk
 | Variabel | Standard | Beskrivelse |
 |---|---|---|
 | `PORT` | `3000` | Port Node.js lytter på |
+| `SITE_URL` | `http://localhost:3000` | Ekstern URL — brukes i e-postlenker |
 | `ADMIN_PASSWORD` | `mekk2024` | Passord for admin-panelet |
 | `SESSION_SECRET` | *(hardkodet)* | Hemmelighet for session-kryptering — bytt i produksjon! |
+| `SMTP_USER` | *(tom)* | Google Workspace-adressen e-post sendes fra |
+| `SMTP_PASS` | *(tom)* | App-passord (ikke vanlig passord — se under) |
+| `ADMIN_EMAIL` | *(tom)* | E-postadressen admin mottar varsler på |
 
 Settes i `ecosystem.config.js` (produksjon) eller `.env`-fil (utvikling).
+
+### Sette opp e-postvarsler (Google Workspace)
+
+E-post sendes via `smtp.gmail.com` med et **App-passord** — ikke det vanlige kontopassordet.
+
+1. Gå til [myaccount.google.com](https://myaccount.google.com) → **Sikkerhet**
+2. Sørg for at **2-trinnsverifisering** er aktivert
+3. Søk etter **App-passord** og opprett ett (velg "Annet" som app-type)
+4. Kopier det 16-tegns passordet og bruk det som `SMTP_PASS`
+
+Hvis `SMTP_USER` ikke er satt starter appen som normalt uten å sende e-post.
 
 ---
 
