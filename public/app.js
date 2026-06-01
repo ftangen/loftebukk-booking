@@ -1,8 +1,8 @@
 (() => {
   'use strict';
 
-  const HOURS_START = 7;
-  const HOURS_END = 21;
+  const HOURS_START = 0;
+  const HOURS_END = 24;
   const HOURS = Array.from({ length: HOURS_END - HOURS_START }, (_, i) => HOURS_START + i);
 
   const NO_MONTHS = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
@@ -211,8 +211,8 @@
       slot.title = `${pad(h)}:00–${pad(h+1)}:00 (${label})`;
       timeBar.appendChild(slot);
     }
-    // Tick labels every 3 hours
-    for (let h = HOURS_START; h <= HOURS_END; h += 3) {
+    // Tick labels every 6 hours
+    for (let h = HOURS_START; h <= HOURS_END; h += 6) {
       const tick = document.createElement('span');
       tick.textContent = `${h}`;
       timeBarTicks.appendChild(tick);
