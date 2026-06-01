@@ -25,8 +25,8 @@ app.get('/api/bookings', (req, res) => {
 app.post('/api/bookings', (req, res) => {
   const { name, phone, license_plate, date, start_time, end_time, notes } = req.body;
 
-  if (!name?.trim() || !phone?.trim() || !license_plate?.trim() || !date || !start_time || !end_time) {
-    return res.status(400).json({ error: 'Alle obligatoriske felt må fylles ut.' });
+  if (!name?.trim() || !phone?.trim() || !license_plate?.trim() || !date || !start_time || !end_time || !notes?.trim()) {
+    return res.status(400).json({ error: 'Alle obligatoriske felt må fylles ut — inkludert hva som skal gjøres med bilen.' });
   }
 
   // Block Thursdays

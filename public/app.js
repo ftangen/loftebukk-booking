@@ -8,13 +8,11 @@
   const NO_MONTHS = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
   const NO_DAYS_SHORT = ['man','tir','ons','tor','fre','lør','søn'];
 
-  // State
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth();
   let selectedDate = null;
-  let approvedBookings = []; // [{id, name, date, start_time, end_time}]
+  let approvedBookings = [];
 
-  // DOM refs
   const calGrid = document.getElementById('calendar-grid');
   const monthTitle = document.getElementById('month-title');
   const dayDetail = document.getElementById('day-detail');
@@ -38,21 +36,16 @@
     try {
       const res = await fetch('/api/bookings');
       approvedBookings = await res.json();
-      renderCalendar();
-    } catch {
-      // silently degrade — calendar still shows but without booking data
-      renderCalendar();
-    }
+    } catch { /* degrade gracefully */ }
+    renderCalendar();
   }
 
   // ── Calendar ─────────────────────────────────────────
   function renderCalendar() {
     monthTitle.textContent = `${NO_MONTHS[currentMonth]} ${currentYear}`;
-
     const firstDay = new Date(currentYear, currentMonth, 1);
     const lastDay = new Date(currentYear, currentMonth + 1, 0);
 
-    // Monday-based week offset (0=Mon … 6=Sun)
     let startOffset = firstDay.getDay() - 1;
     if (startOffset < 0) startOffset = 6;
 
@@ -61,32 +54,25 @@
 
     calGrid.innerHTML = '';
 
-    // Empty cells before first day
     for (let i = 0; i < startOffset; i++) {
       const el = document.createElement('div');
-      el.className = 'calendar-day empty';
+      el.className = 'cal-day empty';
       calGrid.appendChild(el);
     }
 
     for (let d = 1; d <= lastDay.getDate(); d++) {
       const date = new Date(currentYear, currentMonth, d);
       const dateStr = toDateStr(date);
-      const dow = date.getDay(); // 0=Sun, 4=Thu
+      const dow = date.getDay();
       const isPast = date < today;
       const isToday = date.getTime() === today.getTime();
       const isThursday = dow === 4;
       const isSelected = selectedDate === dateStr;
-
-      const status = getDateStatus(dateStr, isThursday);
+      const status = isThursday ? 'thursday' : getDateStatus(dateStr);
 
       const el = document.createElement('div');
-      el.className = [
-        'calendar-day',
-        isPast ? 'past' : '',
-        isToday ? 'today' : '',
-        isThursday ? 'thursday' : status,
-        isSelected && !isThursday ? 'selected' : '',
-      ].filter(Boolean).join(' ');
+      const classes = ['cal-day', isPast ? 'past' : '', isToday ? 'today' : '', isSelected ? 'selected' : status];
+      el.className = classes.filter(Boolean).join(' ');
 
       el.innerHTML = `<span>${d}</span>${makeDot(status, isThursday)}`;
       el.setAttribute('role', 'button');
@@ -95,7 +81,7 @@
       if (!isPast && !isThursday) {
         el.addEventListener('click', () => selectDay(dateStr, date));
       } else if (isThursday && !isPast) {
-        el.title = 'Ungdomsklubb-dag – kan ikke bookes';
+        el.title = 'Reservert for ungdomsklubben';
       }
 
       calGrid.appendChild(el);
@@ -109,24 +95,17 @@
     return '';
   }
 
-  function getDateStatus(dateStr, isThursday) {
-    if (isThursday) return 'thursday';
+  function getDateStatus(dateStr) {
     const dayBookings = approvedBookings.filter(b => b.date === dateStr);
-    if (dayBookings.length === 0) return 'available';
-
+    if (!dayBookings.length) return 'available';
     const bookedHours = countBookedHours(dayBookings);
-    const totalHours = HOURS_END - HOURS_START;
-    if (bookedHours >= totalHours) return 'full';
-    return 'partial';
+    return bookedHours >= (HOURS_END - HOURS_START) ? 'full' : 'partial';
   }
 
   function countBookedHours(bookings) {
-    // Count unique booked hours across all bookings for a day
     const booked = new Set();
     for (const b of bookings) {
-      const start = parseInt(b.start_time);
-      const end = parseInt(b.end_time);
-      for (let h = start; h < end; h++) booked.add(h);
+      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) booked.add(h);
     }
     return booked.size;
   }
@@ -136,31 +115,29 @@
     selectedDate = dateStr;
     renderCalendar();
 
-    const dayNum = dateObj.getDate();
-    const dowIdx = (dateObj.getDay() + 6) % 7; // 0=Mon
-    detailTitle.textContent = `${NO_DAYS_SHORT[dowIdx]}. ${dayNum}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+    const dowIdx = (dateObj.getDay() + 6) % 7;
+    detailTitle.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
-    const dayBookings = approvedBookings.filter(b => b.date === dateStr);
+    const dayBookings = approvedBookings.filter(b => b.date === dateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
 
-    if (dayBookings.length === 0) {
-      detailBookings.innerHTML = '<div class="empty-day">Ingen bookinger denne dagen – løftebukken er ledig! 🎉</div>';
+    if (!dayBookings.length) {
+      detailBookings.innerHTML = `
+        <div class="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-green-700 text-sm font-medium">
+          <span class="text-lg">🎉</span> Løftebukken er helt ledig denne dagen!
+        </div>`;
     } else {
-      dayBookings.sort((a, b) => a.start_time.localeCompare(b.start_time));
       detailBookings.innerHTML = dayBookings.map(b => `
-        <div class="booking-pill">
-          <span class="time">${b.start_time} – ${b.end_time}</span>
-          <span class="who">${escHtml(b.name)}</span>
-        </div>
-      `).join('');
+        <div class="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-3 mb-2">
+          <span class="font-bold text-blue-700 text-sm whitespace-nowrap">${b.start_time} – ${b.end_time}</span>
+          <span class="text-slate-500 text-sm">${escHtml(b.name)}</span>
+        </div>`).join('');
     }
 
-    // Check if still any hours free
     const bookedHours = countBookedHours(dayBookings);
-    const totalHours = HOURS_END - HOURS_START;
-    if (bookedHours >= totalHours) {
-      bookBtnWrap.innerHTML = '<p style="text-align:center;color:var(--danger);font-size:.875rem;margin-top:10px">Løftebukken er fullt booket denne dagen.</p>';
+    if (bookedHours >= HOURS_END - HOURS_START) {
+      bookBtnWrap.innerHTML = `<p class="text-center text-red-600 text-sm font-medium mt-1">Løftebukken er fullt booket denne dagen.</p>`;
     } else {
-      bookBtnWrap.innerHTML = `<button class="btn btn-primary btn-full" id="open-modal-btn">📅 Book løftebukken denne dagen</button>`;
+      bookBtnWrap.innerHTML = `<button id="open-modal-btn" class="w-full mt-1 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl transition-colors text-sm">📅 Book løftebukken denne dagen</button>`;
       document.getElementById('open-modal-btn').addEventListener('click', () => openModal(dateStr, dateObj, dayBookings));
     }
 
@@ -174,13 +151,12 @@
     renderCalendar();
   });
 
-  // ── Booking modal ────────────────────────────────────
+  // ── Modal ────────────────────────────────────────────
   function openModal(dateStr, dateObj, dayBookings) {
     const dowIdx = (dateObj.getDay() + 6) % 7;
-    bookingDateInfo.textContent = `${NO_DAYS_SHORT[dowIdx]}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
+    bookingDateInfo.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
-    // Time bar showing booked hours
-    if (dayBookings.length > 0) {
+    if (dayBookings.length) {
       buildTimeBar(dayBookings);
       timeBarWrap.style.display = '';
     } else {
@@ -189,83 +165,51 @@
 
     populateTimeSelects(dayBookings);
     hideError();
-    formView.style.display = '';
-    successView.style.display = 'none';
     bookingForm.reset();
+    formView.classList.remove('hidden');
+    successView.classList.add('hidden');
     modal.style.display = 'flex';
-    document.getElementById('f-name').focus();
+    setTimeout(() => document.getElementById('f-name').focus(), 250);
   }
 
   function buildTimeBar(dayBookings) {
     timeBar.innerHTML = '';
     timeBarTicks.innerHTML = '';
-    const totalHours = HOURS_END - HOURS_START;
-
     const bookedSet = new Set();
     for (const b of dayBookings) {
-      const s = parseInt(b.start_time);
-      const e = parseInt(b.end_time);
-      for (let h = s; h < e; h++) bookedSet.add(h);
+      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) bookedSet.add(h);
     }
-
     for (let h = HOURS_START; h < HOURS_END; h++) {
       const slot = document.createElement('div');
       slot.className = `time-slot ${bookedSet.has(h) ? 'booked' : 'free'}`;
-      slot.title = `${pad(h)}:00–${pad(h+1)}:00 ${bookedSet.has(h) ? '(opptatt)' : '(ledig)'}`;
+      slot.title = `${pad(h)}:00–${pad(h+1)}:00 (${bookedSet.has(h) ? 'opptatt' : 'ledig'})`;
       timeBar.appendChild(slot);
     }
-
-    // Tick marks: show every 3 hours
-    for (let h = HOURS_START; h <= HOURS_END; h++) {
-      if (h === HOURS_START || h === HOURS_END || (h - HOURS_START) % 3 === 0) {
-        const tick = document.createElement('span');
-        tick.textContent = `${h}`;
-        tick.style.flex = h === HOURS_END ? '0' : `${3 / totalHours * 100}%`;
-        timeBarTicks.appendChild(tick);
-      }
+    // Tick labels every 3 hours
+    for (let h = HOURS_START; h <= HOURS_END; h += 3) {
+      const tick = document.createElement('span');
+      tick.textContent = `${h}`;
+      timeBarTicks.appendChild(tick);
     }
   }
 
   function populateTimeSelects(dayBookings) {
-    const bookedSet = new Set();
-    for (const b of dayBookings) {
-      const s = parseInt(b.start_time);
-      const e = parseInt(b.end_time);
-      for (let h = s; h < e; h++) bookedSet.add(h);
-    }
-
-    fStart.innerHTML = HOURS.map(h =>
-      `<option value="${pad(h)}:00">${pad(h)}:00</option>`
-    ).join('');
-
+    fStart.innerHTML = HOURS.map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`).join('');
     updateEndSelect();
-
-    fStart.addEventListener('change', updateEndSelect);
+    fStart.onchange = updateEndSelect;
 
     function updateEndSelect() {
       const startH = parseInt(fStart.value);
-      fEnd.innerHTML = HOURS
-        .filter(h => h > startH)
-        .map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`)
-        .join('');
-      // Default to 1 hour later
-      if (fEnd.options.length) fEnd.value = `${pad(startH + 1)}:00`;
+      fEnd.innerHTML = HOURS.filter(h => h > startH).map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`).join('');
+      if (fEnd.options.length) fEnd.value = `${pad(Math.min(startH + 2, HOURS_END))}:00`;
     }
   }
 
   document.getElementById('close-modal').addEventListener('click', closeModal);
-  document.getElementById('close-success').addEventListener('click', () => {
-    closeModal();
-    loadBookings();
-  });
+  document.getElementById('close-success').addEventListener('click', () => { closeModal(); loadBookings(); });
+  modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-  modal.addEventListener('click', (e) => {
-    if (e.target === modal) closeModal();
-  });
-
-  function closeModal() {
-    modal.style.display = 'none';
-  }
+  function closeModal() { modal.style.display = 'none'; }
 
   // ── Form submit ──────────────────────────────────────
   bookingForm.addEventListener('submit', async (e) => {
@@ -279,8 +223,8 @@
     const endTime = fEnd.value;
     const notes = document.getElementById('f-notes').value.trim();
 
-    if (!name || !phone || !plate || !startTime || !endTime) {
-      showError('Alle obligatoriske felt (*) må fylles ut.');
+    if (!name || !phone || !plate || !startTime || !endTime || !notes) {
+      showError('Alle felt merket med * må fylles ut — inkludert hva som skal gjøres med bilen.');
       return;
     }
     if (phone.replace(/\D/g, '').length < 8) {
@@ -302,8 +246,8 @@
       if (!res.ok) {
         showError(data.error || 'Noe gikk galt. Prøv igjen.');
       } else {
-        formView.style.display = 'none';
-        successView.style.display = '';
+        formView.classList.add('hidden');
+        successView.classList.remove('hidden');
       }
     } catch {
       showError('Kunne ikke nå serveren. Sjekk tilkoblingen og prøv igjen.');
@@ -313,32 +257,28 @@
     }
   });
 
-  // ── Navigation ───────────────────────────────────────
+  // ── Month navigation ──────────────────────────────────
   document.getElementById('prev-month').addEventListener('click', () => {
-    currentMonth--;
-    if (currentMonth < 0) { currentMonth = 11; currentYear--; }
+    if (--currentMonth < 0) { currentMonth = 11; currentYear--; }
     selectedDate = null;
     dayDetail.style.display = 'none';
     renderCalendar();
   });
 
   document.getElementById('next-month').addEventListener('click', () => {
-    currentMonth++;
-    if (currentMonth > 11) { currentMonth = 0; currentYear++; }
+    if (++currentMonth > 11) { currentMonth = 0; currentYear++; }
     selectedDate = null;
     dayDetail.style.display = 'none';
     renderCalendar();
   });
 
   // ── Helpers ──────────────────────────────────────────
-  function toDateStr(d) {
-    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-  }
+  function toDateStr(d) { return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`; }
   function pad(n) { return String(n).padStart(2, '0'); }
-  function escHtml(s) { return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-  function showError(msg) { formError.textContent = msg; formError.classList.add('show'); }
-  function hideError() { formError.classList.remove('show'); }
+  function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+  function escHtml(s) { return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function showError(msg) { formError.textContent = msg; formError.classList.remove('hidden'); }
+  function hideError() { formError.classList.add('hidden'); }
 
-  // ── Init ─────────────────────────────────────────────
   loadBookings();
 })();
