@@ -27,11 +27,14 @@
 .cal-day.partial { background: #fffbeb; }
 .cal-day.partial:not(.past):hover { border-color: #fcd34d; }
 .cal-day.full { background: #fef2f2; color: #dc2626; cursor: default; }
+.cal-day.pending-only { background: #fefce8; border: 2px dashed #fbbf24 !important; }
+.cal-day.pending-only:not(.past):hover { background: #fef9c3; }
 
 .day-dot { width: 4px; height: 4px; border-radius: 50%; margin-top: 2px; flex-shrink: 0; }
 .dot-full { background: #dc2626; }
 .dot-partial { background: #d97706; }
 .dot-thursday { background: #7c3aed; }
+.dot-pending { background: transparent; border: 1.5px dashed #d97706; }
 
 /* Modal bottom-sheet animation */
 @keyframes slideUp { from { transform: translateY(48px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
@@ -43,8 +46,9 @@
 .time-bar { display: flex; height: 18px; border-radius: 6px; overflow: hidden; border: 1px solid #e2e8f0; }
 .time-slot { flex: 1; border-right: 1px solid rgba(0,0,0,.06); }
 .time-slot:last-child { border-right: none; }
-.time-slot.booked { background: #fca5a5; }
-.time-slot.free   { background: #bbf7d0; }
+.time-slot.booked   { background: #fca5a5; }
+.time-slot.pending  { background: #fde68a; }
+.time-slot.free     { background: #bbf7d0; }
 .time-bar-ticks { display: flex; font-size: 0.6rem; color: #94a3b8; margin-top: 3px; }
 .time-bar-ticks span { flex: 1; }
 .time-bar-ticks span:last-child { flex: 0; text-align: right; }

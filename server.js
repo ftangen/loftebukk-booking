@@ -16,9 +16,9 @@ app.use(session({
   cookie: { maxAge: 8 * 60 * 60 * 1000 } // 8 hours
 }));
 
-// Public: get approved bookings for calendar
+// Public: get approved + pending bookings for calendar
 app.get('/api/bookings', (req, res) => {
-  res.json(db.getApprovedBookings());
+  res.json(db.getPublicBookings());
 });
 
 // Public: submit new booking request

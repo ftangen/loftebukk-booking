@@ -11,7 +11,7 @@
   let currentYear = new Date().getFullYear();
   let currentMonth = new Date().getMonth();
   let selectedDate = null;
-  let approvedBookings = [];
+  let publicBookings = []; // approved + pending
 
   const calGrid = document.getElementById('calendar-grid');
   const monthTitle = document.getElementById('month-title');
@@ -35,7 +35,7 @@
   async function loadBookings() {
     try {
       const res = await fetch('/api/bookings');
-      approvedBookings = await res.json();
+      publicBookings = await res.json();
     } catch { /* degrade gracefully */ }
     renderCalendar();
   }
@@ -92,14 +92,18 @@
     if (isThursday) return '<span class="day-dot dot-thursday"></span>';
     if (status === 'full') return '<span class="day-dot dot-full"></span>';
     if (status === 'partial') return '<span class="day-dot dot-partial"></span>';
+    if (status === 'pending-only') return '<span class="day-dot dot-pending"></span>';
     return '';
   }
 
   function getDateStatus(dateStr) {
-    const dayBookings = approvedBookings.filter(b => b.date === dateStr);
-    if (!dayBookings.length) return 'available';
-    const bookedHours = countBookedHours(dayBookings);
-    return bookedHours >= (HOURS_END - HOURS_START) ? 'full' : 'partial';
+    const day = publicBookings.filter(b => b.date === dateStr);
+    const approved = day.filter(b => b.status === 'approved');
+    const bookedHours = countBookedHours(approved);
+    if (bookedHours >= HOURS_END - HOURS_START) return 'full';
+    if (bookedHours > 0) return 'partial';
+    if (day.some(b => b.status === 'pending')) return 'pending-only';
+    return 'available';
   }
 
   function countBookedHours(bookings) {
@@ -118,27 +122,43 @@
     const dowIdx = (dateObj.getDay() + 6) % 7;
     detailTitle.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
-    const dayBookings = approvedBookings.filter(b => b.date === dateStr).sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const dayApproved = publicBookings.filter(b => b.date === dateStr && b.status === 'approved').sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const dayPending  = publicBookings.filter(b => b.date === dateStr && b.status === 'pending').sort((a, b) => a.start_time.localeCompare(b.start_time));
 
-    if (!dayBookings.length) {
+    if (!dayApproved.length && !dayPending.length) {
       detailBookings.innerHTML = `
         <div class="flex items-center gap-3 bg-green-50 border border-green-100 rounded-xl px-4 py-3 text-green-700 text-sm font-medium">
           <span class="text-lg">🎉</span> Løftebukken er helt ledig denne dagen!
         </div>`;
     } else {
-      detailBookings.innerHTML = dayBookings.map(b => `
+      const approvedHtml = dayApproved.map(b => `
         <div class="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-3 mb-2">
           <span class="font-bold text-blue-700 text-sm whitespace-nowrap">${b.start_time} – ${b.end_time}</span>
           <span class="text-slate-500 text-sm">${escHtml(b.name)}</span>
         </div>`).join('');
+
+      const pendingHtml = dayPending.map(b => `
+        <div class="flex items-center gap-3 bg-amber-50 border border-dashed border-amber-300 rounded-xl px-4 py-3 mb-2">
+          <span class="font-bold text-amber-700 text-sm whitespace-nowrap">${b.start_time} – ${b.end_time}</span>
+          <span class="text-slate-500 text-sm">${escHtml(b.name)}</span>
+          <span class="ml-auto text-xs text-amber-600 font-semibold whitespace-nowrap">⏳ Venter</span>
+        </div>`).join('');
+
+      const pendingHeader = dayPending.length ? `
+        <p class="text-xs font-semibold text-amber-600 uppercase tracking-wide mb-2 mt-3">Venter på godkjenning</p>` : '';
+      const approvedHeader = dayApproved.length ? `
+        <p class="text-xs font-semibold text-blue-600 uppercase tracking-wide mb-2">Godkjent</p>` : '';
+
+      detailBookings.innerHTML = (dayApproved.length ? approvedHeader + approvedHtml : '') +
+                                 (dayPending.length  ? pendingHeader  + pendingHtml  : '');
     }
 
-    const bookedHours = countBookedHours(dayBookings);
+    const bookedHours = countBookedHours(dayApproved);
     if (bookedHours >= HOURS_END - HOURS_START) {
       bookBtnWrap.innerHTML = `<p class="text-center text-red-600 text-sm font-medium mt-1">Løftebukken er fullt booket denne dagen.</p>`;
     } else {
       bookBtnWrap.innerHTML = `<button id="open-modal-btn" class="w-full mt-1 py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold rounded-xl transition-colors text-sm">📅 Book løftebukken denne dagen</button>`;
-      document.getElementById('open-modal-btn').addEventListener('click', () => openModal(dateStr, dateObj, dayBookings));
+      document.getElementById('open-modal-btn').addEventListener('click', () => openModal(dateStr, dateObj, dayApproved, dayPending));
     }
 
     dayDetail.style.display = '';
@@ -152,18 +172,18 @@
   });
 
   // ── Modal ────────────────────────────────────────────
-  function openModal(dateStr, dateObj, dayBookings) {
+  function openModal(dateStr, dateObj, dayApproved, dayPending) {
     const dowIdx = (dateObj.getDay() + 6) % 7;
     bookingDateInfo.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
-    if (dayBookings.length) {
-      buildTimeBar(dayBookings);
+    if (dayApproved.length || dayPending.length) {
+      buildTimeBar(dayApproved, dayPending);
       timeBarWrap.style.display = '';
     } else {
       timeBarWrap.style.display = 'none';
     }
 
-    populateTimeSelects(dayBookings);
+    populateTimeSelects(dayApproved);
     hideError();
     bookingForm.reset();
     formView.classList.remove('hidden');
@@ -172,17 +192,23 @@
     setTimeout(() => document.getElementById('f-name').focus(), 250);
   }
 
-  function buildTimeBar(dayBookings) {
+  function buildTimeBar(dayApproved, dayPending) {
     timeBar.innerHTML = '';
     timeBarTicks.innerHTML = '';
-    const bookedSet = new Set();
-    for (const b of dayBookings) {
-      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) bookedSet.add(h);
+    const approvedSet = new Set();
+    const pendingSet  = new Set();
+    for (const b of dayApproved) {
+      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) approvedSet.add(h);
+    }
+    for (const b of dayPending) {
+      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) pendingSet.add(h);
     }
     for (let h = HOURS_START; h < HOURS_END; h++) {
+      const cls = approvedSet.has(h) ? 'booked' : pendingSet.has(h) ? 'pending' : 'free';
+      const label = approvedSet.has(h) ? 'opptatt' : pendingSet.has(h) ? 'venter godkjenning' : 'ledig';
       const slot = document.createElement('div');
-      slot.className = `time-slot ${bookedSet.has(h) ? 'booked' : 'free'}`;
-      slot.title = `${pad(h)}:00–${pad(h+1)}:00 (${bookedSet.has(h) ? 'opptatt' : 'ledig'})`;
+      slot.className = `time-slot ${cls}`;
+      slot.title = `${pad(h)}:00–${pad(h+1)}:00 (${label})`;
       timeBar.appendChild(slot);
     }
     // Tick labels every 3 hours

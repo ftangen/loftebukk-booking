@@ -15,11 +15,12 @@ function writeDb(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
 }
 
-function getApprovedBookings() {
+// Returns approved + pending bookings for the public calendar (no phone/plate)
+function getPublicBookings() {
   const { bookings } = readDb();
   return bookings
-    .filter(b => b.status === 'approved')
-    .map(({ id, name, date, start_time, end_time }) => ({ id, name, date, start_time, end_time }))
+    .filter(b => b.status === 'approved' || b.status === 'pending')
+    .map(({ id, name, date, start_time, end_time, status }) => ({ id, name, date, start_time, end_time, status }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
 }
 
@@ -69,4 +70,4 @@ function deleteBooking(id) {
   writeDb(db);
 }
 
-module.exports = { getApprovedBookings, getAllBookings, createBooking, checkConflict, updateBookingStatus, deleteBooking };
+module.exports = { getPublicBookings, getAllBookings, createBooking, checkConflict, updateBookingStatus, deleteBooking };
