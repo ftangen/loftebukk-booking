@@ -6,9 +6,10 @@ Booking-system for løftebukk på mekkeklubben — bygget for frivillige som vil
 
 - **Mobiloptimalisert kalender** med fargekoding: ledig, delvis opptatt, fullt opptatt
 - **Torsdager blokkert automatisk** (reservert for ungdomsklubben)
-- **Bookingskjema** krever navn, telefonnummer, skiltnummer og tidspunkt
+- **Bookingskjema** krever navn, telefonnummer, skiltnummer, tidspunkt og *hva som skal gjøres med bilen*
 - **Konfliktsjekk** hindrer dobbeltbooking
 - **Admin-panel** for å godkjenne, avvise eller slette bookinger
+- **Moderne UI** bygget med Tailwind CSS — bottom-sheet modal på mobil, sentrert dialog på desktop
 
 ## Kom i gang
 
@@ -85,4 +86,4 @@ cp .env.example .env
 
 - **Backend:** Node.js + Express
 - **Database:** JSON-fil (ingen ekstern database nødvendig)
-- **Frontend:** Vanilla HTML/CSS/JavaScript — ingen rammeverk
+- **Frontend:** Vanilla JavaScript + [Tailwind CSS](https://tailwindcss.com/) via CDN — ingen build-steg
