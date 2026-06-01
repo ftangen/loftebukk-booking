@@ -35,15 +35,19 @@ Standard admin-passord: **`mekk2024`**
 
 ---
 
-## Produksjonssetting (Debian + Nginx + PM2 + Cloudflare)
+## Produksjonssetting (Debian + Nginx + PM2)
+
+> **To alternativer for SSL** — velg det som passer deg:
+> - **[Let's Encrypt](#alternativ-a--lets-encrypt-anbefalt)** — DNS hos vanlig registrar, gratis sertifikat, Certbot ordner alt automatisk ✅
+> - **[Cloudflare](#alternativ-b--cloudflare-proxy)** — kun hvis domenet allerede er knyttet til Cloudflare
 
 ### Oversikt over arkitektur
 
 ```
-Besøkende → [HTTPS] → Cloudflare → [HTTP] → Nginx → Node.js :3000
+Besøkende → [HTTPS] → Nginx (Certbot-sertifikat) → Node.js :3000
 ```
 
-Cloudflare håndterer SSL-sertifikat og DDoS-beskyttelse. Nginx er reverse proxy. PM2 holder Node.js-prosessen i live.
+Nginx er reverse proxy og terminerer SSL. PM2 holder Node.js-prosessen i live og starter den ved reboot.
 
 ---
 
@@ -101,7 +105,7 @@ curl http://localhost:3000/api/bookings
 
 ---
 
-### 4 — Konfigurer Nginx
+### 4 — Konfigurer Nginx (HTTP-konfig, brukes av begge alternativer)
 
 ```bash
 nano /etc/nginx/sites-available/loftebukk
@@ -113,9 +117,6 @@ Lim inn:
 server {
     listen 80;
     server_name booking.10w-30mc.no;
-
-    # Cloudflare sender kun din-IP, blokker direkte-trafikk
-    # (valgfritt — se Cloudflare-seksjonen under)
 
     location / {
         proxy_pass         http://localhost:3000;
@@ -139,38 +140,68 @@ nginx -t && systemctl reload nginx
 
 ```bash
 ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP (Cloudflare bruker dette)
+ufw allow 80/tcp    # HTTP + Let's Encrypt-verifisering
+ufw allow 443/tcp   # HTTPS
 ufw enable
 ufw status
 ```
-
-> Port 443 trenger du **ikke** å åpne — Cloudflare Flexible-modus snakker HTTP til origin.
 
 ---
 
 ### 6 — Router (ESXi/hjemmenett)
 
-Sett opp port-forwarding på hjemmerouteren:
+Port-forward på hjemmerouteren:
 
 | Ekstern port | Intern IP (VM) | Intern port |
 |---|---|---|
 | 80 | `<VM sin lokale IP>` | 80 |
+| 443 | `<VM sin lokale IP>` | 443 |
 
 Finn VM-ens IP med `ip a` på Debian-maskinen.
 
 ---
 
-### 7 — Cloudflare DNS og SSL
+### Alternativ A — Let's Encrypt (anbefalt)
 
-1. Gå til **DNS** for `10w-30mc.no` i Cloudflare-dashbordet
-2. Legg til A-record:
-   - **Name:** `booking`
-   - **IPv4:** `<din offentlige IP>` (finn den på f.eks. [whatismyip.com](https://whatismyip.com))
-   - **Proxy status:** 🟠 Proxied (oransje sky — viktig!)
-3. Gå til **SSL/TLS** → sett modus til **Flexible**
-4. Gå til **SSL/TLS → Edge Certificates** → slå på **Always Use HTTPS**
+Forutsetning: DNS A-record hos din registrar peker allerede på din offentlige IP (se steg 7a under), og portene 80 og 443 er åpne fra internett.
 
-DNS propagerer vanligvis i løpet av et par minutter med Cloudflare.
+```bash
+# Installer Certbot
+apt install -y certbot python3-certbot-nginx
+
+# Hent og installer sertifikat — Certbot oppdaterer Nginx-konfigen automatisk
+certbot --nginx -d booking.10w-30mc.no
+
+# Test automatisk fornyelse (sertifikater varer 90 dager, fornyes automatisk)
+certbot renew --dry-run
+```
+
+Det er alt. Certbot legger til HTTPS-konfig i Nginx og setter opp en cron-jobb for automatisk fornyelse.
+
+#### 7a — DNS hos registrar (Let's Encrypt)
+
+Logg inn hos din DNS-tilbyder og legg til:
+
+| Type | Navn | Verdi |
+|---|---|---|
+| A | `booking` | `<din offentlige IP>` |
+
+Finn offentlig IP: `curl ifconfig.me` på Debian-maskinen, eller sjekk ruterens WAN-IP.
+
+> DNS-propagering tar typisk 5–30 minutter. Sjekk med `nslookup booking.10w-30mc.no`.
+
+---
+
+### Alternativ B — Cloudflare proxy
+
+Bruk dette hvis domenet er knyttet til Cloudflare (oransje sky).
+
+Med Cloudflare Flexible trenger du **ikke** sertifikat på serveren — Cloudflare terminerer HTTPS og snakker HTTP til origin. Da kan du hoppe over Certbot og kun ha port 80 åpen.
+
+1. Gå til **DNS** i Cloudflare-dashbordet for `10w-30mc.no`
+2. Legg til A-record: `booking` → `<din offentlige IP>`, **Proxy: 🟠 Proxied**
+3. **SSL/TLS** → modus: **Flexible**
+4. **SSL/TLS → Edge Certificates** → slå på **Always Use HTTPS**
 
 ---
 
