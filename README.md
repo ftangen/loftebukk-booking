@@ -131,7 +131,7 @@ server {
 
 ```bash
 ln -s /etc/nginx/sites-available/loftebukk /etc/nginx/sites-enabled/
-nginx -t && systemctl reload nginx
+/usr/sbin/nginx -t && systemctl reload nginx
 ```
 
 ---
