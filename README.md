@@ -4,13 +4,32 @@ Booking-system for løftebukk på mekkeklubben — bygget for frivillige som vil
 
 ## Funksjoner
 
-- **Mobiloptimalisert kalender** med fargekoding: ledig, venter godkjenning, delvis opptatt, fullt opptatt
-- **Torsdager blokkert automatisk** (reservert for ungdomsklubben)
-- **Bookingskjema** krever navn, telefonnummer, skiltnummer, tidspunkt og *hva som skal gjøres med bilen*
-- **Ventende bookinger** vises i kalenderen med stiplet kantlinje, slik at andre ser at noen har vist interesse
-- **Konfliktsjekk** hindrer dobbeltbooking av godkjente tider
-- **Admin-panel** for å godkjenne, avvise eller slette bookinger
-- **Moderne UI** bygget med Tailwind CSS — bottom-sheet modal på mobil, sentrert dialog på desktop
+**Brukersiden:**
+- Mobiloptimalisert kalender med fargekoding: ledig, venter godkjenning, delvis opptatt, fullt opptatt
+- Torsdager blokkert automatisk (reservert for ungdomsklubben)
+- Bookingskjema krever navn, telefonnummer, e-post, skiltnummer, tidspunkt og hva som skal gjøres
+- Ventende bookinger vises i kalenderen med stiplet kantlinje
+- Konfliktsjekk hindrer dobbeltbooking av godkjente tider
+- Ordensregler tilgjengelig som sammenleggbar boks
+
+**Admin-panel:**
+- Innlogging med brukernavn + passord — støtter flere admin-brukere
+- Tre faner: til behandling, godkjent, avvist
+- Avvisning krever skriftlig begrunnelse (vises i e-post til frivillig og i kortvisningen)
+- Booking-kortene viser hvem som godkjente/avslo og når
+- Statistikk-fane: nøkkeltall, 6-måneders oversikt, topp-bookere, admin-aktivitet
+
+**E-postvarsler (Google Workspace SMTP):**
+- Frivillig: bekreftelse ved innsending med kanselleringslenke
+- Frivillig: godkjenning eller avvisning (med begrunnelse) fra admin
+- Frivillig: påminnelse kl. 18:00 dagen før godkjent booking
+- Admin: varsel ved ny forespørsel og når godkjent booking kanselleres
+- Alle e-poster til frivillig inneholder ordensregler
+
+**Annet:**
+- Frivillige kan kansellere via lenke i e-posten (ingen innlogging nødvendig)
+- Automatisk påminnelsesjobb via node-cron
+- Moderne UI med Tailwind CSS — bottom-sheet modal på mobil
 
 ---
 
@@ -31,7 +50,7 @@ npm start
 | Booking (brukere) | http://localhost:3000 |
 | Admin-panel | http://localhost:3000/admin.html |
 
-Standard admin-passord: **`mekk2024`**
+Standard innlogging: brukernavn `Admin`, passord `mekk2024`
 
 ---
 
@@ -47,26 +66,15 @@ Standard admin-passord: **`mekk2024`**
 Besøkende → [HTTPS] → Nginx (Certbot-sertifikat) → Node.js :3000
 ```
 
-Nginx er reverse proxy og terminerer SSL. PM2 holder Node.js-prosessen i live og starter den ved reboot.
-
 ---
 
 ### 1 — Server-oppsett (Debian)
 
 ```bash
-# Oppdater systemet
 apt update && apt upgrade -y
-
-# Installer Node.js 20 LTS
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt install -y nodejs
-
-# Installer Nginx og PM2
-apt install -y nginx
+apt install -y nodejs nginx ufw
 npm install -g pm2
-
-# Installer UFW (brannmur)
-apt install -y ufw
 ```
 
 ---
@@ -85,19 +93,16 @@ npm install
 
 ```bash
 cp ecosystem.config.example.js ecosystem.config.js
-nano ecosystem.config.js   # fyll inn ADMIN_PASSWORD og SESSION_SECRET
+nano ecosystem.config.js
 ```
 
 ```bash
 pm2 start ecosystem.config.js
 pm2 save
-
-# Generer og kjør startup-kommandoen (PM2 starter ved boot)
-pm2 startup
-# → kjør kommandoen som vises i output
+pm2 startup   # kjør kommandoen som vises i output
 ```
 
-Verifiser at den kjører:
+Verifiser:
 ```bash
 pm2 status
 curl http://localhost:3000/api/bookings
@@ -105,13 +110,11 @@ curl http://localhost:3000/api/bookings
 
 ---
 
-### 4 — Konfigurer Nginx (HTTP-konfig, brukes av begge alternativer)
+### 4 — Konfigurer Nginx
 
 ```bash
 nano /etc/nginx/sites-available/loftebukk
 ```
-
-Lim inn:
 
 ```nginx
 server {
@@ -139,109 +142,105 @@ ln -s /etc/nginx/sites-available/loftebukk /etc/nginx/sites-enabled/
 ### 5 — Brannmur (UFW)
 
 ```bash
-ufw allow 22/tcp    # SSH
-ufw allow 80/tcp    # HTTP + Let's Encrypt-verifisering
-ufw allow 443/tcp   # HTTPS
+ufw allow 22/tcp
+ufw allow 80/tcp
+ufw allow 443/tcp
 ufw enable
-ufw status
 ```
 
 ---
 
 ### 6 — Router (ESXi/hjemmenett)
 
-Port-forward på hjemmerouteren:
-
 | Ekstern port | Intern IP (VM) | Intern port |
 |---|---|---|
 | 80 | `<VM sin lokale IP>` | 80 |
 | 443 | `<VM sin lokale IP>` | 443 |
 
-Finn VM-ens IP med `ip a` på Debian-maskinen.
+Finn VM-ens IP med `ip a`.
 
 ---
 
 ### Alternativ A — Let's Encrypt (anbefalt)
 
-Forutsetning: DNS A-record hos din registrar peker allerede på din offentlige IP (se steg 7a under), og portene 80 og 443 er åpne fra internett.
-
 ```bash
-# Installer Certbot
 apt install -y certbot python3-certbot-nginx
-
-# Hent og installer sertifikat — Certbot oppdaterer Nginx-konfigen automatisk
 certbot --nginx -d booking.10w-30mc.no
-
-# Test automatisk fornyelse (sertifikater varer 90 dager, fornyes automatisk)
-certbot renew --dry-run
+certbot renew --dry-run   # test automatisk fornyelse
 ```
 
-Det er alt. Certbot legger til HTTPS-konfig i Nginx og setter opp en cron-jobb for automatisk fornyelse.
-
-#### 7a — DNS hos registrar (Let's Encrypt)
-
-Logg inn hos din DNS-tilbyder og legg til:
+Legg til DNS A-record hos registraren din:
 
 | Type | Navn | Verdi |
 |---|---|---|
 | A | `booking` | `<din offentlige IP>` |
 
-Finn offentlig IP: `curl ifconfig.me` på Debian-maskinen, eller sjekk ruterens WAN-IP.
-
-> DNS-propagering tar typisk 5–30 minutter. Sjekk med `nslookup booking.10w-30mc.no`.
+> DNS-propagering tar typisk 5–30 min. Sjekk med `nslookup booking.10w-30mc.no`.
 
 ---
 
 ### Alternativ B — Cloudflare proxy
 
-Bruk dette hvis domenet er knyttet til Cloudflare (oransje sky).
+1. DNS → A-record: `booking` → `<din offentlige IP>`, **Proxy: 🟠 Proxied**
+2. SSL/TLS → modus: **Flexible**
+3. SSL/TLS → Edge Certificates → **Always Use HTTPS**
 
-Med Cloudflare Flexible trenger du **ikke** sertifikat på serveren — Cloudflare terminerer HTTPS og snakker HTTP til origin. Da kan du hoppe over Certbot og kun ha port 80 åpen.
-
-1. Gå til **DNS** i Cloudflare-dashbordet for `10w-30mc.no`
-2. Legg til A-record: `booking` → `<din offentlige IP>`, **Proxy: 🟠 Proxied**
-3. **SSL/TLS** → modus: **Flexible**
-4. **SSL/TLS → Edge Certificates** → slå på **Always Use HTTPS**
+Med Flexible trenger du ikke sertifikat på serveren og kan hoppe over Certbot.
 
 ---
 
-### 8 — Oppgrader appen
+### Oppgrader appen
 
 ```bash
 cd /opt/loftebukk
 git pull
-npm install
+npm install        # nødvendig hvis nye avhengigheter er lagt til
 pm2 restart loftebukk
 ```
 
-> `data/bookings.json` berøres ikke av `git pull` siden `data/` er i `.gitignore`.
+> `data/bookings.json` berøres ikke av `git pull`.
 
 ---
 
 ## Konfigurasjon
 
+Alle variabler settes i `ecosystem.config.js` (produksjon) eller `.env` (utvikling).
+
 | Variabel | Standard | Beskrivelse |
 |---|---|---|
 | `PORT` | `3000` | Port Node.js lytter på |
-| `SITE_URL` | `http://localhost:3000` | Ekstern URL — brukes i e-postlenker |
-| `ADMIN_PASSWORD` | `mekk2024` | Passord for admin-panelet |
+| `SITE_URL` | `http://localhost:3000` | Ekstern URL — brukes i e-postlenker og kanselleringslenker |
+| `ADMINS` | *(se under)* | Admin-brukere på formatet `Navn:passord,Navn2:passord2` |
 | `SESSION_SECRET` | *(hardkodet)* | Hemmelighet for session-kryptering — bytt i produksjon! |
 | `SMTP_USER` | *(tom)* | Google Workspace-adressen e-post sendes fra |
 | `SMTP_PASS` | *(tom)* | App-passord (ikke vanlig passord — se under) |
 | `ADMIN_EMAIL` | *(tom)* | E-postadressen admin mottar varsler på |
 
-Settes i `ecosystem.config.js` (produksjon) eller `.env`-fil (utvikling).
+### Flere admin-brukere
 
-### Sette opp e-postvarsler (Google Workspace)
+```js
+// ecosystem.config.js
+ADMINS: 'Fredrik:passord1,Kari:passord2',
+```
 
-E-post sendes via `smtp.gmail.com` med et **App-passord** — ikke det vanlige kontopassordet.
+Hvert navn og passord separeres med `:`, og brukere separeres med `,`. Endringer krever restart:
 
-1. Gå til [myaccount.google.com](https://myaccount.google.com) → **Sikkerhet**
-2. Sørg for at **2-trinnsverifisering** er aktivert
-3. Søk etter **App-passord** og opprett ett (velg "Annet" som app-type)
-4. Kopier det 16-tegns passordet og bruk det som `SMTP_PASS`
+```bash
+pm2 delete loftebukk
+pm2 start /opt/loftebukk/ecosystem.config.js
+pm2 save
+```
 
-Hvis `SMTP_USER` ikke er satt starter appen som normalt uten å sende e-post.
+### E-postvarsler (Google Workspace)
+
+E-post sendes via `smtp.gmail.com` med et **App-passord**.
+
+1. [myaccount.google.com](https://myaccount.google.com) → **Sikkerhet**
+2. Aktiver **2-trinnsverifisering**
+3. Søk etter **App-passord** → opprett nytt → velg "Annet"
+4. Bruk det 16-tegns passordet som `SMTP_PASS`
+
+Appen starter normalt uten å sende e-post hvis `SMTP_USER` ikke er satt.
 
 ---
 
@@ -249,8 +248,9 @@ Hvis `SMTP_USER` ikke er satt starter appen som normalt uten å sende e-post.
 
 ```
 .
-├── server.js                    # Express-server og API-ruter
+├── server.js                    # Express-server, API-ruter og cron-jobb
 ├── db.js                        # Datahåndtering (JSON-fil)
+├── mailer.js                    # E-postvarsler via nodemailer/Gmail SMTP
 ├── ecosystem.config.example.js  # PM2-konfig-mal
 ├── data/
 │   └── bookings.json            # Alle bookinger (opprettes automatisk)
@@ -268,17 +268,21 @@ Hvis `SMTP_USER` ikke er satt starter appen som normalt uten å sende e-post.
 |---|---|---|
 | `GET` | `/api/bookings` | Godkjente + ventende bookinger (kalender) |
 | `POST` | `/api/bookings` | Sende booking-forespørsel |
+| `GET` | `/cancel/:token` | Kansellere booking via e-postlenke |
 | `POST` | `/api/admin/login` | Logge inn som admin |
 | `GET` | `/api/admin/bookings` | Alle bookinger (admin) |
+| `GET` | `/api/admin/stats` | Statistikk (admin) |
 | `PUT` | `/api/admin/bookings/:id/approve` | Godkjenne booking |
-| `PUT` | `/api/admin/bookings/:id/reject` | Avvise booking |
+| `PUT` | `/api/admin/bookings/:id/reject` | Avvise booking (krever `{ reason }` i body) |
 | `DELETE` | `/api/admin/bookings/:id` | Slette booking |
 
 ## Teknisk stack
 
 - **Backend:** Node.js + Express
 - **Database:** JSON-fil (ingen ekstern database nødvendig)
+- **Jobb-planlegging:** node-cron (daglig påminnelses-e-post)
+- **E-post:** Nodemailer via Gmail/Google Workspace SMTP
 - **Prosesstyring:** PM2
 - **Reverse proxy:** Nginx
+- **SSL:** Let's Encrypt via Certbot
 - **Frontend:** Vanilla JavaScript + [Tailwind CSS](https://tailwindcss.com/) via CDN
-- **SSL / CDN:** Cloudflare
