@@ -20,7 +20,7 @@ app.use(session({
 }));
 
 // Public: get approved + pending bookings for calendar
-app.get('/api/bookings', (req, res) => {
+app.get('/api/bookings', (_req, res) => {
   res.json(db.getPublicBookings());
 });
 
@@ -55,6 +55,7 @@ app.post('/api/bookings', async (req, res) => {
 
   // Fire-and-forget — e-postfeil stopper ikke bookingen
   mailer.notifyAdminNewBooking(booking);
+  mailer.notifyVolunteerSubmitted(booking);
 
   res.status(201).json({ message: 'Booking-forespørsel mottatt! En admin vil behandle den snart.', id: booking.id });
 });

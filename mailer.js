@@ -38,6 +38,22 @@ async function send(to, subject, html) {
   }
 }
 
+// Gjenbrukbar påminnelsesblokk
+const REMINDERS_HTML = `
+  <div style="margin:20px 0;padding:16px 20px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;">
+    <p style="margin:0 0 10px;font-weight:700;color:#92400e;font-size:14px;">📋 Husk når du er ferdig:</p>
+    <ul style="margin:0;padding-left:20px;color:#78350f;font-size:14px;line-height:2.1;">
+      <li>Rydd etter deg — gjelder både område og verktøy</li>
+      <li>Slå av lys og kompressor</li>
+      <li>Husk å låse porten</li>
+    </ul>
+  </div>`;
+
+const FOOTER_HTML = `
+  <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
+    Sendt automatisk av Løftebukk-booking
+  </div>`;
+
 // ── E-post til admin: ny booking-forespørsel ──────────
 async function notifyAdminNewBooking(booking) {
   if (!ADMIN_EMAIL) return;
@@ -75,10 +91,46 @@ async function notifyAdminNewBooking(booking) {
         Gå til admin-panelet →
       </a>
     </div>
+    ${FOOTER_HTML}
+  </div>
+</body></html>`
+  );
+}
 
-    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
-      Sendt automatisk av Løftebukk-booking
+// ── E-post til frivillig: booking mottatt (venter godkjenning) ──
+async function notifyVolunteerSubmitted(booking) {
+  if (!booking.email) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    booking.email,
+    `⏳ Booking mottatt — ${dateStr}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">⏳</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Booking mottatt!</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
     </div>
+
+    <div style="padding:24px 28px;">
+      <p style="margin:0 0 20px;font-size:15px;">Hei ${esc(booking.name)}! 👋<br>
+      Vi har mottatt bookingen din. En admin vil behandle den snart og du får e-post med bekreftelse.</p>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;margin-bottom:4px;">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:5px 0;color:#1e40af;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Hva</td>   <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
+        </table>
+      </div>
+
+      ${REMINDERS_HTML}
+    </div>
+    ${FOOTER_HTML}
   </div>
 </body></html>`
   );
@@ -106,23 +158,18 @@ async function notifyVolunteerApproved(booking) {
       <p style="margin:0 0 20px;font-size:15px;">Hei ${esc(booking.name)}! 👋<br>
       Bookingen din er godkjent. Vi gleder oss til å se deg!</p>
 
-      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;margin-bottom:20px;">
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;">
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
-          <tr><td style="padding:5px 0;color:#166534;width:110px;">Dato</td>        <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
-          <tr><td style="padding:5px 0;color:#166534;">Tid</td>         <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
-          <tr><td style="padding:5px 0;color:#166534;">Bil</td>         <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
-          <tr><td style="padding:5px 0;color:#166534;">Hva</td>         <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Hva</td>   <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
         </table>
       </div>
 
-      <p style="margin:0;font-size:14px;color:#64748b;">
-        Husk å rydde etter deg og legg nøklene tilbake på plass. God mekking! 🔧
-      </p>
+      ${REMINDERS_HTML}
     </div>
-
-    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
-      Sendt automatisk av Løftebukk-booking
-    </div>
+    ${FOOTER_HTML}
   </div>
 </body></html>`
   );
@@ -159,10 +206,7 @@ async function notifyVolunteerRejected(booking) {
         <a href="${SITE_URL}" style="color:#1d4ed8;">booking-siden</a>.
       </p>
     </div>
-
-    <div style="padding:16px 28px;background:#f8fafc;border-top:1px solid #e2e8f0;font-size:12px;color:#94a3b8;">
-      Sendt automatisk av Løftebukk-booking
-    </div>
+    ${FOOTER_HTML}
   </div>
 </body></html>`
   );
@@ -172,4 +216,4 @@ function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-module.exports = { notifyAdminNewBooking, notifyVolunteerApproved, notifyVolunteerRejected };
+module.exports = { notifyAdminNewBooking, notifyVolunteerSubmitted, notifyVolunteerApproved, notifyVolunteerRejected };
