@@ -206,9 +206,15 @@ async function notifyVolunteerRejected(booking) {
       <p style="margin:0 0 16px;font-size:15px;">Hei ${esc(booking.name)}!<br>
       Dessverre kunne ikke bookingen din godkjennes denne gangen.</p>
 
-      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:20px;font-size:14px;color:#7f1d1d;">
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:14px;color:#7f1d1d;">
         <strong>${dateStr}</strong>, ${esc(booking.start_time)} – ${esc(booking.end_time)}
       </div>
+
+      ${booking.rejection_reason ? `
+      <div style="margin-bottom:16px;padding:12px 16px;background:#f8fafc;border-radius:8px;border-left:3px solid #dc2626;font-size:14px;">
+        <p style="margin:0 0 4px;color:#94a3b8;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;">Begrunnelse</p>
+        <p style="margin:0;color:#374151;">${esc(booking.rejection_reason)}</p>
+      </div>` : ''}
 
       <p style="margin:0;font-size:14px;color:#64748b;">
         Prøv gjerne å booke en annen tid på

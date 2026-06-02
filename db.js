@@ -16,7 +16,6 @@ function writeDb(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
 }
 
-// Returns approved + pending bookings for the public calendar (no phone/plate/email)
 function getPublicBookings() {
   const { bookings } = readDb();
   return bookings
@@ -56,11 +55,22 @@ function checkConflict(date, start_time, end_time, excludeId = null) {
   ) || null;
 }
 
-function updateBookingStatus(id, status) {
+function updateBookingStatus(id, status, { adminName = '', reason = '' } = {}) {
   const db = readDb();
   const booking = db.bookings.find(b => b.id === parseInt(id));
   if (!booking) return null;
   booking.status = status;
+  booking.action_at = new Date().toISOString();
+  if (status === 'approved') {
+    booking.approved_by = adminName;
+    delete booking.rejected_by;
+    delete booking.rejection_reason;
+  }
+  if (status === 'rejected') {
+    booking.rejected_by = adminName;
+    booking.rejection_reason = reason;
+    delete booking.approved_by;
+  }
   writeDb(db);
   return booking;
 }
@@ -91,8 +101,67 @@ function deleteBooking(id) {
   writeDb(db);
 }
 
+function getStats() {
+  const { bookings } = readDb();
+
+  const byStatus = s => bookings.filter(b => b.status === s);
+  const hours = list => list.reduce((sum, b) => sum + (parseInt(b.end_time) - parseInt(b.start_time)), 0);
+
+  const approved = byStatus('approved');
+  const now = new Date();
+  const thisMonthPrefix = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  const thisMonthApproved = approved.filter(b => b.date.startsWith(thisMonthPrefix));
+
+  // Top 5 bookere (by approved bookings)
+  const bookerMap = {};
+  approved.forEach(b => { bookerMap[b.name] = (bookerMap[b.name] || 0) + 1; });
+  const topBookers = Object.entries(bookerMap)
+    .sort((a, b) => b[1] - a[1]).slice(0, 5)
+    .map(([name, count]) => ({ name, count }));
+
+  // Admin-aktivitet
+  const adminMap = {};
+  bookings.forEach(b => {
+    if (b.approved_by) {
+      adminMap[b.approved_by] = adminMap[b.approved_by] || { approved: 0, rejected: 0 };
+      adminMap[b.approved_by].approved++;
+    }
+    if (b.rejected_by) {
+      adminMap[b.rejected_by] = adminMap[b.rejected_by] || { approved: 0, rejected: 0 };
+      adminMap[b.rejected_by].rejected++;
+    }
+  });
+  const adminActivity = Object.entries(adminMap)
+    .map(([name, counts]) => ({ name, ...counts }))
+    .sort((a, b) => (b.approved + b.rejected) - (a.approved + a.rejected));
+
+  // Siste 6 måneder
+  const monthly = [];
+  for (let i = 5; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const prefix = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const label = d.toLocaleString('no-NO', { month: 'short', year: '2-digit' });
+    const list = approved.filter(b => b.date.startsWith(prefix));
+    monthly.push({ label, count: list.length, hours: hours(list) });
+  }
+
+  return {
+    total: bookings.length,
+    pending: byStatus('pending').length,
+    approved: approved.length,
+    rejected: byStatus('rejected').length,
+    cancelled: byStatus('cancelled').length,
+    totalHours: hours(approved),
+    thisMonthCount: thisMonthApproved.length,
+    thisMonthHours: hours(thisMonthApproved),
+    topBookers,
+    adminActivity,
+    monthly,
+  };
+}
+
 module.exports = {
   getPublicBookings, getAllBookings, createBooking, checkConflict,
   updateBookingStatus, getBookingByToken, cancelByToken,
-  getTomorrowsApprovedBookings, deleteBooking,
+  getTomorrowsApprovedBookings, deleteBooking, getStats,
 };
