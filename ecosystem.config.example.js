@@ -14,8 +14,8 @@ module.exports = {
       NODE_ENV: 'production',
       PORT: 3000,
       SITE_URL: 'https://booking.10w-30mc.no',
-      // Admin-brukere: navn:passord,navn2:passord2
-      ADMINS: 'Fredrik:passord1,Kari:passord2',
+      // Admin-brukernavn (kun navn, ingen passord — settes ved første innlogging)
+      ADMINS: 'Fredrik,Kari',
       SESSION_SECRET: 'langt-tilfeldig-passord-minst-32-tegn',
       // E-postvarsler via Google Workspace
       // Lag App-passord på: myaccount.google.com → Sikkerhet → App-passord

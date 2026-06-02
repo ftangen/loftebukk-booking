@@ -4,9 +4,28 @@ const crypto = require('crypto');
 
 const dataDir = path.join(__dirname, 'data');
 const dbFile = path.join(dataDir, 'bookings.json');
+const adminsFile = path.join(dataDir, 'admins.json');
 
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir);
 if (!fs.existsSync(dbFile)) fs.writeFileSync(dbFile, JSON.stringify({ nextId: 1, bookings: [] }));
+if (!fs.existsSync(adminsFile)) fs.writeFileSync(adminsFile, JSON.stringify({}));
+
+// ── Admin user management ─────────────────────────────
+function getAdminNames() {
+  if (process.env.ADMINS) return process.env.ADMINS.split(',').map(n => n.trim()).filter(Boolean);
+  return ['Admin'];
+}
+
+function getAdminHash(name) {
+  const data = JSON.parse(fs.readFileSync(adminsFile, 'utf8'));
+  return data[name] || null; // returns bcrypt hash or null if not set
+}
+
+function setAdminHash(name, hash) {
+  const data = JSON.parse(fs.readFileSync(adminsFile, 'utf8'));
+  data[name] = hash;
+  fs.writeFileSync(adminsFile, JSON.stringify(data, null, 2));
+}
 
 function readDb() {
   return JSON.parse(fs.readFileSync(dbFile, 'utf8'));
@@ -164,4 +183,5 @@ module.exports = {
   getPublicBookings, getAllBookings, createBooking, checkConflict,
   updateBookingStatus, getBookingByToken, cancelByToken,
   getTomorrowsApprovedBookings, deleteBooking, getStats,
+  getAdminNames, getAdminHash, setAdminHash,
 };

@@ -17,6 +17,7 @@
       <h1 class="text-xl font-extrabold text-slate-900 mb-1">Admin-innlogging</h1>
       <p class="text-slate-500 text-sm mb-6">Løftebukk-booking — mekkeklubben</p>
       <div id="login-error" class="hidden mb-4 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl text-left"></div>
+      <!-- Login form -->
       <form id="login-form" novalidate class="space-y-4 text-left">
         <div>
           <label for="username" class="block text-sm font-semibold text-slate-700 mb-1.5">Brukernavn</label>
@@ -32,6 +33,29 @@
           Logg inn
         </button>
       </form>
+
+      <!-- First-time setup form (hidden until needed) -->
+      <div id="setup-form" class="hidden text-left">
+        <div class="mb-4 px-4 py-3 bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-xl">
+          👋 Første innlogging — sett ditt eget passord.
+        </div>
+        <div id="setup-error" class="hidden mb-3 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl"></div>
+        <div class="space-y-3">
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nytt passord <span class="text-slate-400 font-normal">(minst 8 tegn)</span></label>
+            <input type="password" id="setup-password" placeholder="••••••••"
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition text-base">
+          </div>
+          <div>
+            <label class="block text-sm font-semibold text-slate-700 mb-1.5">Bekreft passord</label>
+            <input type="password" id="setup-confirm" placeholder="••••••••"
+              class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition text-base">
+          </div>
+          <button id="setup-submit" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors">
+            Sett passord og logg inn
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -47,9 +71,14 @@
             <p class="text-slate-400 text-xs" id="admin-name-label"></p>
           </div>
         </div>
-        <button id="logout-btn" class="text-sm text-slate-300 hover:text-white font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
-          Logg ut →
-        </button>
+        <div class="flex items-center gap-2">
+          <button id="change-password-btn" class="text-sm text-slate-400 hover:text-white font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
+            🔑 Bytt passord
+          </button>
+          <button id="logout-btn" class="text-sm text-slate-300 hover:text-white font-medium transition-colors px-3 py-1.5 rounded-lg hover:bg-white/10">
+            Logg ut →
+          </button>
+        </div>
       </div>
     </header>
 
@@ -77,6 +106,32 @@
       <div id="stats-panel" class="hidden"></div>
 
     </main>
+  </div>
+
+  <!-- Change password modal -->
+  <div id="change-password-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-5" style="background:rgba(0,0,0,.5);backdrop-filter:blur(4px)">
+    <div class="bg-white rounded-2xl shadow-xl w-full max-w-sm p-6">
+      <h3 class="font-extrabold text-slate-900 mb-4">Bytt passord</h3>
+      <div id="change-password-error" class="hidden mb-3 px-4 py-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl"></div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nåværende passord</label>
+          <input type="password" id="current-password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition text-base">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Nytt passord <span class="text-slate-400 font-normal">(minst 8 tegn)</span></label>
+          <input type="password" id="new-password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition text-base">
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-slate-700 mb-1.5">Bekreft nytt passord</label>
+          <input type="password" id="confirm-password" class="w-full px-4 py-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none transition text-base">
+        </div>
+      </div>
+      <div class="flex gap-3 mt-4">
+        <button id="change-password-confirm" class="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors text-sm">Lagre</button>
+        <button id="change-password-cancel" class="flex-1 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl transition-colors text-sm">Avbryt</button>
+      </div>
+    </div>
   </div>
 
   <!-- Reject reason modal -->

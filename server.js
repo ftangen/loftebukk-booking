@@ -2,24 +2,13 @@ const express = require('express');
 const session = require('express-session');
 const path = require('path');
 const cron = require('node-cron');
+const bcrypt = require('bcryptjs');
 const db = require('./db');
 const mailer = require('./mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-// Support multiple admins via ADMINS=Name1:pass1,Name2:pass2
-// Falls back to single ADMIN_PASSWORD for backwards compatibility
-function getAdmins() {
-  if (process.env.ADMINS) {
-    return process.env.ADMINS.split(',').map(entry => {
-      const colon = entry.indexOf(':');
-      return { name: entry.slice(0, colon).trim(), password: entry.slice(colon + 1).trim() };
-    });
-  }
-  return [{ name: 'Admin', password: process.env.ADMIN_PASSWORD || 'mekk2024' }];
-}
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -107,16 +96,52 @@ function cancelPage(status, booking) {
 }
 
 // ── Admin auth ──────────────────────────────────────────
-app.post('/api/admin/login', (req, res) => {
+app.post('/api/admin/login', async (req, res) => {
   const { username, password } = req.body;
-  const admin = getAdmins().find(a => a.name.toLowerCase() === username?.toLowerCase().trim() && a.password === password);
-  if (admin) {
-    req.session.isAdmin = true;
-    req.session.adminName = admin.name;
-    res.json({ ok: true, name: admin.name });
-  } else {
-    res.status(401).json({ error: 'Feil brukernavn eller passord.' });
+  const name = db.getAdminNames().find(n => n.toLowerCase() === username?.toLowerCase().trim());
+  if (!name) return res.status(401).json({ error: 'Feil brukernavn eller passord.' });
+
+  const hash = db.getAdminHash(name);
+  if (!hash) {
+    // First login — must set own password
+    req.session.pendingSetup = name;
+    return res.json({ needsSetup: true });
   }
+
+  const valid = await bcrypt.compare(password, hash);
+  if (!valid) return res.status(401).json({ error: 'Feil brukernavn eller passord.' });
+
+  req.session.isAdmin = true;
+  req.session.adminName = name;
+  res.json({ ok: true, name });
+});
+
+// First-time password setup
+app.post('/api/admin/setup-password', async (req, res) => {
+  if (!req.session.pendingSetup) return res.status(403).json({ error: 'Ikke autorisert.' });
+  const { password } = req.body;
+  if (!password || password.length < 8) return res.status(400).json({ error: 'Passord må være minst 8 tegn.' });
+
+  const hash = await bcrypt.hash(password, 10);
+  db.setAdminHash(req.session.pendingSetup, hash);
+  req.session.isAdmin = true;
+  req.session.adminName = req.session.pendingSetup;
+  delete req.session.pendingSetup;
+  res.json({ ok: true, name: req.session.adminName });
+});
+
+// Change own password
+app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
+  const { currentPassword, newPassword } = req.body;
+  if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Nytt passord må være minst 8 tegn.' });
+
+  const hash = db.getAdminHash(req.session.adminName);
+  if (!hash || !(await bcrypt.compare(currentPassword, hash))) {
+    return res.status(401).json({ error: 'Feil nåværende passord.' });
+  }
+
+  db.setAdminHash(req.session.adminName, await bcrypt.hash(newPassword, 10));
+  res.json({ ok: true });
 });
 
 app.post('/api/admin/logout', (req, res) => {
@@ -171,10 +196,9 @@ cron.schedule('0 18 * * *', async () => {
 });
 
 app.listen(PORT, () => {
-  const admins = getAdmins();
   console.log(`\n  Løftebukk-booking kjører:`);
   console.log(`  Brukersiden:  http://localhost:${PORT}`);
   console.log(`  Admin-panel:  http://localhost:${PORT}/admin.html`);
-  console.log(`  Admins:       ${admins.map(a => a.name).join(', ')}`);
+  console.log(`  Admins:       ${db.getAdminNames().join(', ')}`);
   console.log(`  E-post:       ${process.env.SMTP_USER ? `✓ ${process.env.SMTP_USER}` : '✗ ikke konfigurert'}\n`);
 });

@@ -42,7 +42,11 @@
         body: JSON.stringify({ username, password }),
       });
       const data = await res.json();
-      if (res.ok) {
+      if (data.needsSetup) {
+        document.getElementById('login-form').classList.add('hidden');
+        document.getElementById('setup-form').classList.remove('hidden');
+        document.getElementById('setup-password').focus();
+      } else if (res.ok) {
         loginPage.classList.add('hidden');
         setAdminName(data.name);
         showAdminPage();
@@ -56,12 +60,91 @@
     }
   });
 
+  // ── First-time password setup ─────────────────────────
+  document.getElementById('setup-submit').addEventListener('click', async () => {
+    const password = document.getElementById('setup-password').value;
+    const confirm = document.getElementById('setup-confirm').value;
+    const errorEl = document.getElementById('setup-error');
+    errorEl.classList.add('hidden');
+
+    if (password.length < 8) { errorEl.textContent = 'Passordet må være minst 8 tegn.'; errorEl.classList.remove('hidden'); return; }
+    if (password !== confirm) { errorEl.textContent = 'Passordene stemmer ikke overens.'; errorEl.classList.remove('hidden'); return; }
+
+    try {
+      const res = await fetch('/api/admin/setup-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ password }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        loginPage.classList.add('hidden');
+        setAdminName(data.name);
+        showAdminPage();
+      } else {
+        errorEl.textContent = data.error || 'Noe gikk galt.';
+        errorEl.classList.remove('hidden');
+      }
+    } catch {
+      errorEl.textContent = 'Kunne ikke nå serveren.';
+      errorEl.classList.remove('hidden');
+    }
+  });
+
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await fetch('/api/admin/logout', { method: 'POST' });
     adminPage.classList.add('hidden');
+    document.getElementById('login-form').classList.remove('hidden');
+    document.getElementById('setup-form').classList.add('hidden');
     loginPage.classList.remove('hidden');
     document.getElementById('username').value = '';
     document.getElementById('password').value = '';
+  });
+
+  // ── Change password ───────────────────────────────────
+  const changePwModal = document.getElementById('change-password-modal');
+
+  document.getElementById('change-password-btn').addEventListener('click', () => {
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
+    document.getElementById('change-password-error').classList.add('hidden');
+    changePwModal.classList.remove('hidden');
+    document.getElementById('current-password').focus();
+  });
+
+  document.getElementById('change-password-cancel').addEventListener('click', () => {
+    changePwModal.classList.add('hidden');
+  });
+
+  document.getElementById('change-password-confirm').addEventListener('click', async () => {
+    const currentPassword = document.getElementById('current-password').value;
+    const newPassword = document.getElementById('new-password').value;
+    const confirmPassword = document.getElementById('confirm-password').value;
+    const errorEl = document.getElementById('change-password-error');
+    errorEl.classList.add('hidden');
+
+    if (newPassword.length < 8) { errorEl.textContent = 'Nytt passord må være minst 8 tegn.'; errorEl.classList.remove('hidden'); return; }
+    if (newPassword !== confirmPassword) { errorEl.textContent = 'Passordene stemmer ikke overens.'; errorEl.classList.remove('hidden'); return; }
+
+    try {
+      const res = await fetch('/api/admin/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ currentPassword, newPassword }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        changePwModal.classList.add('hidden');
+        alert('Passord byttet!');
+      } else {
+        errorEl.textContent = data.error || 'Noe gikk galt.';
+        errorEl.classList.remove('hidden');
+      }
+    } catch {
+      errorEl.textContent = 'Kunne ikke nå serveren.';
+      errorEl.classList.remove('hidden');
+    }
   });
 
   // ── Admin page ───────────────────────────────────────
