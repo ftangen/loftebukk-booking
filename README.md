@@ -202,6 +202,33 @@ pm2 restart loftebukk
 
 ---
 
+### Backup
+
+Appen tar automatisk daglig sikkerhetskopi av `bookings.json` kl. 02:00. Kopiene lagres i `data/backups/` med datostempel og slettes automatisk etter 30 dager.
+
+```
+data/backups/
+├── 2026-06-01-bookings.json
+├── 2026-06-02-bookings.json
+└── ...
+```
+
+**Gjenopprette fra backup:**
+```bash
+cp /opt/loftebukk/data/backups/2026-06-01-bookings.json /opt/loftebukk/data/bookings.json
+pm2 restart loftebukk
+```
+
+**Valgfritt: off-server backup med rsync**
+
+For ekstra sikkerhet kan du sende backups til en annen maskin. Legg til i `/etc/cron.d/loftebukk-backup`:
+
+```
+30 2 * * * root rsync -a /opt/loftebukk/data/backups/ bruker@annen-maskin:/backup/loftebukk/
+```
+
+---
+
 ## Konfigurasjon
 
 Alle variabler settes i `ecosystem.config.js` (produksjon) eller `.env` (utvikling).

@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const fs = require('fs');
 const cron = require('node-cron');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
@@ -192,6 +193,32 @@ cron.schedule('0 18 * * *', async () => {
   console.log(`[cron] Påminnelse: sender til ${bookings.length} booking(er) for i morgen`);
   for (const booking of bookings) {
     await mailer.notifyVolunteerReminder(booking);
+  }
+});
+
+// ── Cron: daglig backup kl. 02:00 ──────────────────────
+cron.schedule('0 2 * * *', () => {
+  try {
+    const backupDir = path.join(__dirname, 'data', 'backups');
+    if (!fs.existsSync(backupDir)) fs.mkdirSync(backupDir);
+
+    const date = new Date().toISOString().slice(0, 10);
+    const src  = path.join(__dirname, 'data', 'bookings.json');
+    const dest = path.join(backupDir, `${date}-bookings.json`);
+    fs.copyFileSync(src, dest);
+
+    // Slett sikkerhetskopier eldre enn 30 dager
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000;
+    fs.readdirSync(backupDir)
+      .filter(f => f.endsWith('-bookings.json'))
+      .forEach(f => {
+        const p = path.join(backupDir, f);
+        if (fs.statSync(p).mtimeMs < cutoff) fs.unlinkSync(p);
+      });
+
+    console.log(`[backup] data/backups/${date}-bookings.json lagret`);
+  } catch (err) {
+    console.error('[backup] Feil:', err.message);
   }
 });
 
