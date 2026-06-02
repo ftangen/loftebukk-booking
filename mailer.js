@@ -38,6 +38,10 @@ async function send(to, subject, html) {
   }
 }
 
+function cancelLink(token) {
+  return `${SITE_URL}/cancel/${token}`;
+}
+
 // Gjenbrukbar påminnelsesblokk
 const REMINDERS_HTML = `
   <div style="margin:20px 0;padding:16px 20px;background:#fffbeb;border:1px solid #fde68a;border-radius:10px;">
@@ -129,6 +133,11 @@ async function notifyVolunteerSubmitted(booking) {
       </div>
 
       ${REMINDERS_HTML}
+
+      <div style="margin-top:16px;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;font-size:13px;color:#64748b;">
+        Ønsker du å kansellere bookingen kan du gjøre det her:<br>
+        <a href="${cancelLink(booking.cancel_token)}" style="color:#dc2626;font-weight:600;">Kanseller booking →</a>
+      </div>
     </div>
     ${FOOTER_HTML}
   </div>
@@ -212,8 +221,93 @@ async function notifyVolunteerRejected(booking) {
   );
 }
 
+// ── E-post til frivillig: påminnelse dagen før ────────
+async function notifyVolunteerReminder(booking) {
+  if (!booking.email) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    booking.email,
+    `🔔 Påminnelse: booking i morgen — ${dateStr}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#1e3a8a,#1d4ed8);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">🔔</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Påminnelse — i morgen!</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+      <p style="margin:0 0 20px;font-size:15px;">Hei ${esc(booking.name)}! 👋<br>
+      Du har en bekreftet booking i morgen. Vi gleder oss til å se deg!</p>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;">
+        <table style="width:100%;border-collapse:collapse;font-size:14px;">
+          <tr><td style="padding:5px 0;color:#1e40af;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
+        </table>
+      </div>
+
+      ${REMINDERS_HTML}
+
+      <div style="margin-top:16px;padding:12px 16px;background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;font-size:13px;color:#64748b;">
+        Kan du ikke lenger?
+        <a href="${cancelLink(booking.cancel_token)}" style="color:#dc2626;font-weight:600;">Kanseller booking →</a>
+      </div>
+    </div>
+    ${FOOTER_HTML}
+  </div>
+</body></html>`
+  );
+}
+
+// ── E-post til admin: godkjent booking kansellert ─────
+async function notifyAdminBookingCancelled(booking) {
+  if (!ADMIN_EMAIL) return;
+  const dateStr = formatDate(booking.date);
+
+  await send(
+    ADMIN_EMAIL,
+    `🚫 Booking kansellert av bruker — ${booking.name}`,
+    `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
+  <div style="max-width:520px;margin:0 auto;background:white;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.1);">
+
+    <div style="background:linear-gradient(135deg,#7f1d1d,#dc2626);color:white;padding:24px 28px;">
+      <div style="font-size:30px;margin-bottom:6px;">🚫</div>
+      <h1 style="margin:0;font-size:18px;font-weight:700;">Booking kansellert</h1>
+      <p style="margin:4px 0 0;opacity:.75;font-size:13px;">Løftebukk-booking — mekkeklubben</p>
+    </div>
+
+    <div style="padding:24px 28px;">
+      <p style="margin:0 0 16px;font-size:14px;color:#64748b;">
+        En <strong>godkjent</strong> booking er kansellert av brukeren. Tidsrommet er nå ledig igjen.
+      </p>
+      <table style="width:100%;border-collapse:collapse;font-size:14px;">
+        <tr><td style="padding:7px 0;color:#64748b;width:110px;">Navn</td>   <td style="padding:7px 0;font-weight:700;">${esc(booking.name)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Dato</td>               <td style="padding:7px 0;font-weight:700;">${dateStr}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>                <td style="padding:7px 0;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Skiltnummer</td>        <td style="padding:7px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
+      </table>
+    </div>
+    ${FOOTER_HTML}
+  </div>
+</body></html>`
+  );
+}
+
 function esc(s) {
   return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
-module.exports = { notifyAdminNewBooking, notifyVolunteerSubmitted, notifyVolunteerApproved, notifyVolunteerRejected };
+module.exports = {
+  notifyAdminNewBooking,
+  notifyVolunteerSubmitted,
+  notifyVolunteerApproved,
+  notifyVolunteerRejected,
+  notifyVolunteerReminder,
+  notifyAdminBookingCancelled,
+};

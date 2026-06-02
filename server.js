@@ -1,6 +1,7 @@
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
+const cron = require('node-cron');
 const db = require('./db');
 const mailer = require('./mailer');
 
@@ -104,6 +105,70 @@ app.put('/api/admin/bookings/:id/reject', requireAdmin, async (req, res) => {
 app.delete('/api/admin/bookings/:id', requireAdmin, (req, res) => {
   db.deleteBooking(req.params.id);
   res.json({ ok: true });
+});
+
+// Public: cancel booking via token link
+app.get('/cancel/:token', (req, res) => {
+  const booking = db.getBookingByToken(req.params.token);
+
+  if (!booking) {
+    return res.send(cancelPage('not-found'));
+  }
+  if (booking.status === 'cancelled') {
+    return res.send(cancelPage('already-cancelled', booking));
+  }
+  if (booking.status === 'rejected' || booking.status === 'approved') {
+    const wasApproved = booking.status === 'approved';
+    db.cancelByToken(req.params.token);
+    if (wasApproved) mailer.notifyAdminBookingCancelled(booking);
+    return res.send(cancelPage('success', booking));
+  }
+  // pending
+  db.cancelByToken(req.params.token);
+  return res.send(cancelPage('success', booking));
+});
+
+function cancelPage(status, booking) {
+  const NO_MONTHS = ['januar','februar','mars','april','mai','juni','juli','august','september','oktober','november','desember'];
+  const NO_DAYS = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lørdag'];
+  const dateStr = booking
+    ? (() => { const d = new Date(booking.date + 'T12:00:00'); return `${NO_DAYS[d.getDay()]} ${d.getDate()}. ${NO_MONTHS[d.getMonth()]}` })()
+    : '';
+
+  const states = {
+    'success':           { icon: '✅', color: '#14532d', grad: '#16a34a', title: 'Booking kansellert',      msg: `Bookingen din ${dateStr ? `for ${dateStr}` : ''} er kansellert.` },
+    'already-cancelled': { icon: '✓',  color: '#334155', grad: '#475569', title: 'Allerede kansellert',     msg: 'Denne bookingen er allerede kansellert.' },
+    'not-found':         { icon: '❌', color: '#7f1d1d', grad: '#dc2626', title: 'Lenke ikke funnet',       msg: 'Kanselleringslenken er ugyldig eller bookingen er slettet.' },
+  };
+  const s = states[status] || states['not-found'];
+
+  return `<!DOCTYPE html><html lang="no"><head><meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${s.title} — Løftebukk-booking</title>
+  <script src="https://cdn.tailwindcss.com"></script></head>
+<body class="bg-slate-100 min-h-screen flex items-center justify-center p-5 font-sans">
+  <div class="bg-white rounded-2xl shadow-lg w-full max-w-sm overflow-hidden text-center">
+    <div style="background:linear-gradient(135deg,${s.color},${s.grad})" class="text-white px-6 py-8">
+      <div class="text-5xl mb-3">${s.icon}</div>
+      <h1 class="text-xl font-extrabold">${s.title}</h1>
+    </div>
+    <div class="px-6 py-8">
+      <p class="text-slate-600 mb-6">${s.msg}</p>
+      <a href="/" class="inline-block px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl transition-colors text-sm">
+        Tilbake til booking-siden →
+      </a>
+    </div>
+  </div>
+</body></html>`;
+}
+
+// Cron: send påminnelse kl. 18:00 dagen før godkjente bookinger
+cron.schedule('0 18 * * *', async () => {
+  const bookings = db.getTomorrowsApprovedBookings();
+  console.log(`[cron] Påminnelse: sender til ${bookings.length} booking(er) for i morgen`);
+  for (const booking of bookings) {
+    await mailer.notifyVolunteerReminder(booking);
+  }
 });
 
 app.listen(PORT, () => {

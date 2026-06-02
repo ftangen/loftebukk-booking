@@ -1,5 +1,6 @@
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 
 const dataDir = path.join(__dirname, 'data');
 const dbFile = path.join(dataDir, 'bookings.json');
@@ -15,7 +16,7 @@ function writeDb(data) {
   fs.writeFileSync(dbFile, JSON.stringify(data, null, 2));
 }
 
-// Returns approved + pending bookings for the public calendar (no phone/plate)
+// Returns approved + pending bookings for the public calendar (no phone/plate/email)
 function getPublicBookings() {
   const { bookings } = readDb();
   return bookings
@@ -36,6 +37,7 @@ function createBooking({ name, phone, email, license_plate, date, start_time, en
     name, phone, email, license_plate, date, start_time, end_time,
     notes: notes || '',
     status: 'pending',
+    cancel_token: crypto.randomBytes(24).toString('hex'),
     created_at: new Date().toISOString(),
   };
   db.bookings.push(booking);
@@ -43,7 +45,6 @@ function createBooking({ name, phone, email, license_plate, date, start_time, en
   return booking;
 }
 
-// Returns conflicting booking or null
 function checkConflict(date, start_time, end_time, excludeId = null) {
   const { bookings } = readDb();
   return bookings.find(b =>
@@ -64,10 +65,34 @@ function updateBookingStatus(id, status) {
   return booking;
 }
 
+function getBookingByToken(token) {
+  return readDb().bookings.find(b => b.cancel_token === token) || null;
+}
+
+function cancelByToken(token) {
+  const db = readDb();
+  const booking = db.bookings.find(b => b.cancel_token === token);
+  if (!booking) return null;
+  booking.status = 'cancelled';
+  writeDb(db);
+  return booking;
+}
+
+function getTomorrowsApprovedBookings() {
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const dateStr = tomorrow.toISOString().slice(0, 10);
+  return readDb().bookings.filter(b => b.status === 'approved' && b.date === dateStr);
+}
+
 function deleteBooking(id) {
   const db = readDb();
   db.bookings = db.bookings.filter(b => b.id !== parseInt(id));
   writeDb(db);
 }
 
-module.exports = { getPublicBookings, getAllBookings, createBooking, checkConflict, updateBookingStatus, deleteBooking };
+module.exports = {
+  getPublicBookings, getAllBookings, createBooking, checkConflict,
+  updateBookingStatus, getBookingByToken, cancelByToken,
+  getTomorrowsApprovedBookings, deleteBooking,
+};
