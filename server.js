@@ -50,7 +50,7 @@ app.post('/api/bookings', async (req, res) => {
     license_plate: license_plate.trim().toUpperCase(), date, start_time, end_time, notes: notes.trim(),
   });
 
-  mailer.notifyAdminNewBooking(booking);
+  mailer.notifyAdminNewBooking(booking, getAdminEmails());
   mailer.notifyVolunteerSubmitted(booking);
 
   res.status(201).json({ message: 'Booking-forespørsel mottatt! En admin vil behandle den snart.', id: booking.id });
@@ -64,7 +64,7 @@ app.get('/cancel/:token', (req, res) => {
 
   const wasApproved = booking.status === 'approved';
   db.cancelByToken(req.params.token);
-  if (wasApproved) mailer.notifyAdminBookingCancelled(booking);
+  if (wasApproved) mailer.notifyAdminBookingCancelled(booking, getAdminEmails());
   res.send(cancelPage('success', booking));
 });
 
@@ -131,6 +131,16 @@ app.post('/api/admin/setup-password', async (req, res) => {
   res.json({ ok: true, name: req.session.adminName });
 });
 
+// Update own email
+app.post('/api/admin/set-email', requireAdmin, (req, res) => {
+  const { email } = req.body;
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: 'Ugyldig e-postadresse.' });
+  }
+  db.setAdminEmail(req.session.adminName, email?.trim() || null);
+  res.json({ ok: true });
+});
+
 // Change own password
 app.post('/api/admin/change-password', requireAdmin, async (req, res) => {
   const { currentPassword, newPassword } = req.body;
@@ -150,8 +160,15 @@ app.post('/api/admin/logout', (req, res) => {
 });
 
 app.get('/api/admin/me', (req, res) => {
-  res.json({ loggedIn: !!req.session.isAdmin, name: req.session.adminName || '' });
+  const name = req.session.adminName || '';
+  res.json({ loggedIn: !!req.session.isAdmin, name, email: name ? (db.getAdminEmail(name) || '') : '' });
 });
+
+function getAdminEmails() {
+  const emails = db.getAllAdminEmails();
+  if (emails.length === 0 && process.env.ADMIN_EMAIL) return [process.env.ADMIN_EMAIL];
+  return emails;
+}
 
 function requireAdmin(req, res, next) {
   if (req.session.isAdmin) return next();

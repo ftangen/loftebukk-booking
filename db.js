@@ -16,15 +16,49 @@ function getAdminNames() {
   return ['Admin'];
 }
 
-function getAdminHash(name) {
+function readAdmins() {
   const data = JSON.parse(fs.readFileSync(adminsFile, 'utf8'));
-  return data[name] || null; // returns bcrypt hash or null if not set
+  // Migrate old format: { "Name": "hashstring" } → { "Name": { hash, email } }
+  let migrated = false;
+  for (const [name, val] of Object.entries(data)) {
+    if (typeof val === 'string') {
+      data[name] = { hash: val, email: null };
+      migrated = true;
+    }
+  }
+  if (migrated) fs.writeFileSync(adminsFile, JSON.stringify(data, null, 2));
+  return data;
+}
+
+function writeAdmins(data) {
+  fs.writeFileSync(adminsFile, JSON.stringify(data, null, 2));
+}
+
+function getAdminHash(name) {
+  const data = readAdmins();
+  return data[name]?.hash || null;
 }
 
 function setAdminHash(name, hash) {
-  const data = JSON.parse(fs.readFileSync(adminsFile, 'utf8'));
-  data[name] = hash;
-  fs.writeFileSync(adminsFile, JSON.stringify(data, null, 2));
+  const data = readAdmins();
+  data[name] = { ...(data[name] || {}), hash };
+  writeAdmins(data);
+}
+
+function getAdminEmail(name) {
+  const data = readAdmins();
+  return data[name]?.email || null;
+}
+
+function setAdminEmail(name, email) {
+  const data = readAdmins();
+  data[name] = { ...(data[name] || {}), email: email || null };
+  writeAdmins(data);
+}
+
+function getAllAdminEmails() {
+  const data = readAdmins();
+  return Object.values(data).map(v => v?.email).filter(Boolean);
 }
 
 function readDb() {
@@ -184,4 +218,5 @@ module.exports = {
   updateBookingStatus, getBookingByToken, cancelByToken,
   getTomorrowsApprovedBookings, deleteBooking, getStats,
   getAdminNames, getAdminHash, setAdminHash,
+  getAdminEmail, setAdminEmail, getAllAdminEmails,
 };

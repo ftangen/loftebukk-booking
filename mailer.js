@@ -59,12 +59,13 @@ const FOOTER_HTML = `
   </div>`;
 
 // ── E-post til admin: ny booking-forespørsel ──────────
-async function notifyAdminNewBooking(booking) {
-  if (!ADMIN_EMAIL) return;
+async function notifyAdminNewBooking(booking, adminEmails) {
+  const to = (adminEmails || [ADMIN_EMAIL]).filter(Boolean);
+  if (!to.length) return;
   const dateStr = formatDate(booking.date);
 
   await send(
-    ADMIN_EMAIL,
+    to.join(', '),
     `🔧 Ny booking-forespørsel fra ${booking.name}`,
     `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">
@@ -271,12 +272,13 @@ async function notifyVolunteerReminder(booking) {
 }
 
 // ── E-post til admin: godkjent booking kansellert ─────
-async function notifyAdminBookingCancelled(booking) {
-  if (!ADMIN_EMAIL) return;
+async function notifyAdminBookingCancelled(booking, adminEmails) {
+  const to = (adminEmails || [ADMIN_EMAIL]).filter(Boolean);
+  if (!to.length) return;
   const dateStr = formatDate(booking.date);
 
   await send(
-    ADMIN_EMAIL,
+    to.join(', '),
     `🚫 Booking kansellert av bruker — ${booking.name}`,
     `<!DOCTYPE html><html><head><meta charset="UTF-8"></head>
 <body style="margin:0;padding:20px;background:#f1f5f9;font-family:Arial,sans-serif;">

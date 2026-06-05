@@ -18,15 +18,16 @@
     const res = await fetch('/api/admin/me');
     const { loggedIn, name } = await res.json();
     if (loggedIn) {
-      setAdminName(name);
+      setAdminName(name, email);
       showAdminPage();
     } else {
       loginPage.classList.remove('hidden');
     }
   }
 
-  function setAdminName(name) {
+  function setAdminName(name, email) {
     document.getElementById('admin-name-label').textContent = `Innlogget som ${name}`;
+    if (email) document.getElementById('admin-email').value = email;
   }
 
   // ── Login ────────────────────────────────────────────
@@ -48,7 +49,7 @@
         document.getElementById('setup-password').focus();
       } else if (res.ok) {
         loginPage.classList.add('hidden');
-        setAdminName(data.name);
+        setAdminName(data.name, data.email);
         showAdminPage();
       } else {
         loginError.textContent = data.error || 'Innlogging feilet.';
@@ -109,8 +110,9 @@
     document.getElementById('new-password').value = '';
     document.getElementById('confirm-password').value = '';
     document.getElementById('change-password-error').classList.add('hidden');
+    document.getElementById('change-password-success').classList.add('hidden');
     changePwModal.classList.remove('hidden');
-    document.getElementById('current-password').focus();
+    document.getElementById('admin-email').focus();
   });
 
   document.getElementById('change-password-cancel').addEventListener('click', () => {
@@ -118,33 +120,50 @@
   });
 
   document.getElementById('change-password-confirm').addEventListener('click', async () => {
+    const email = document.getElementById('admin-email').value.trim();
     const currentPassword = document.getElementById('current-password').value;
     const newPassword = document.getElementById('new-password').value;
     const confirmPassword = document.getElementById('confirm-password').value;
     const errorEl = document.getElementById('change-password-error');
+    const successEl = document.getElementById('change-password-success');
     errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
 
-    if (newPassword.length < 8) { errorEl.textContent = 'Nytt passord må være minst 8 tegn.'; errorEl.classList.remove('hidden'); return; }
-    if (newPassword !== confirmPassword) { errorEl.textContent = 'Passordene stemmer ikke overens.'; errorEl.classList.remove('hidden'); return; }
+    // Save email
+    await fetch('/api/admin/set-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email }),
+    });
 
-    try {
-      const res = await fetch('/api/admin/change-password', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ currentPassword, newPassword }),
-      });
-      const data = await res.json();
-      if (res.ok) {
-        changePwModal.classList.add('hidden');
-        alert('Passord byttet!');
-      } else {
-        errorEl.textContent = data.error || 'Noe gikk galt.';
+    // Change password only if fields are filled
+    if (newPassword) {
+      if (newPassword.length < 8) { errorEl.textContent = 'Nytt passord må være minst 8 tegn.'; errorEl.classList.remove('hidden'); return; }
+      if (newPassword !== confirmPassword) { errorEl.textContent = 'Passordene stemmer ikke overens.'; errorEl.classList.remove('hidden'); return; }
+      if (!currentPassword) { errorEl.textContent = 'Skriv inn nåværende passord for å bytte.'; errorEl.classList.remove('hidden'); return; }
+
+      try {
+        const res = await fetch('/api/admin/change-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ currentPassword, newPassword }),
+        });
+        const data = await res.json();
+        if (!res.ok) { errorEl.textContent = data.error || 'Noe gikk galt.'; errorEl.classList.remove('hidden'); return; }
+      } catch {
+        errorEl.textContent = 'Kunne ikke nå serveren.';
         errorEl.classList.remove('hidden');
+        return;
       }
-    } catch {
-      errorEl.textContent = 'Kunne ikke nå serveren.';
-      errorEl.classList.remove('hidden');
+      successEl.textContent = 'E-post og passord lagret!';
+    } else {
+      successEl.textContent = 'E-postadresse lagret!';
     }
+
+    successEl.classList.remove('hidden');
+    document.getElementById('current-password').value = '';
+    document.getElementById('new-password').value = '';
+    document.getElementById('confirm-password').value = '';
   });
 
   // ── Admin page ───────────────────────────────────────
