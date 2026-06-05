@@ -4,3 +4,4 @@ data/
 ecosystem.config.js
 *.log
 .claude/
+settings.local.json
