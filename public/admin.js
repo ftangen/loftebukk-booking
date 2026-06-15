@@ -10,13 +10,14 @@
   let allBookings = [];
   let activeTab = 'pending';
   let pendingRejectId = null;
+  let currentAdminEmail = '';
 
   const NO_MONTHS = ['jan','feb','mar','apr','mai','jun','jul','aug','sep','okt','nov','des'];
 
   // ── Init ─────────────────────────────────────────────
   async function init() {
     const res = await fetch('/api/admin/me');
-    const { loggedIn, name } = await res.json();
+    const { loggedIn, name, email } = await res.json();
     if (loggedIn) {
       setAdminName(name, email);
       showAdminPage();
@@ -27,7 +28,7 @@
 
   function setAdminName(name, email) {
     document.getElementById('admin-name-label').textContent = `Innlogget som ${name}`;
-    if (email) document.getElementById('admin-email').value = email;
+    currentAdminEmail = email || '';
   }
 
   // ── Login ────────────────────────────────────────────
@@ -106,6 +107,7 @@
   const changePwModal = document.getElementById('change-password-modal');
 
   document.getElementById('change-password-btn').addEventListener('click', () => {
+    document.getElementById('admin-email').value = currentAdminEmail;
     document.getElementById('current-password').value = '';
     document.getElementById('new-password').value = '';
     document.getElementById('confirm-password').value = '';
@@ -130,11 +132,18 @@
     successEl.classList.add('hidden');
 
     // Save email
-    await fetch('/api/admin/set-email', {
+    const emailRes = await fetch('/api/admin/set-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email }),
     });
+    if (!emailRes.ok) {
+      const emailData = await emailRes.json().catch(() => ({}));
+      errorEl.textContent = emailData.error || 'Kunne ikke lagre e-postadresse.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    currentAdminEmail = email;
 
     // Change password only if fields are filled
     if (newPassword) {

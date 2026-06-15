@@ -114,7 +114,7 @@ app.post('/api/admin/login', async (req, res) => {
 
   req.session.isAdmin = true;
   req.session.adminName = name;
-  res.json({ ok: true, name });
+  res.json({ ok: true, name, email: db.getAdminEmail(name) || '' });
 });
 
 // First-time password setup
