@@ -242,6 +242,7 @@ Alle variabler settes i `ecosystem.config.js` (produksjon) eller `.env` (utvikli
 | `SMTP_USER` | *(tom)* | Google Workspace-adressen e-post sendes fra |
 | `SMTP_PASS` | *(tom)* | App-passord (ikke vanlig passord — se under) |
 | `ADMIN_EMAIL` | *(tom)* | E-postadressen admin mottar varsler på |
+| `NOTIFY_EMAILS` | *(tom)* | Ekstra adresser (kommaseparert) som alltid får kopi av admin-varsler |
 
 ### Flere admin-brukere
 

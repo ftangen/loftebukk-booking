@@ -166,8 +166,10 @@ app.get('/api/admin/me', (req, res) => {
 
 function getAdminEmails() {
   const emails = db.getAllAdminEmails();
-  if (emails.length === 0 && process.env.ADMIN_EMAIL) return [process.env.ADMIN_EMAIL];
-  return emails;
+  if (emails.length === 0 && process.env.ADMIN_EMAIL) emails.push(process.env.ADMIN_EMAIL);
+  // NOTIFY_EMAILS: kommaseparerte adresser som alltid får kopi av admin-varsler
+  const extra = (process.env.NOTIFY_EMAILS || '').split(',').map(e => e.trim()).filter(Boolean);
+  return [...new Set([...emails, ...extra])];
 }
 
 function requireAdmin(req, res, next) {

@@ -22,6 +22,7 @@ module.exports = {
       SMTP_USER: 'din@adresse.no',
       SMTP_PASS: 'xxxx-xxxx-xxxx-xxxx',
       ADMIN_EMAIL: 'admin@adresse.no',
+      NOTIFY_EMAILS: 'kontakt@adresse.no', // valgfri, kommaseparert
     },
   }],
 };

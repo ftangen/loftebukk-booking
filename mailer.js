@@ -1,3 +1,4 @@
+const dns = require('dns').promises;
 const nodemailer = require('nodemailer');
 
 const SMTP_USER = process.env.SMTP_USER;
@@ -13,21 +14,26 @@ function formatDate(dateStr) {
   return `${NO_DAYS[d.getDay()]} ${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
 }
 
-function getTransporter() {
+const SMTP_HOST = 'smtp.gmail.com';
+
+// Nodemailer ignorerer `family` og bruker egen DNS-oppslag som kan falle tilbake
+// til IPv6 (ENETUNREACH på VM-en). Slå opp IPv4 selv via systemets resolver.
+async function getTransporter() {
   if (!SMTP_USER || !SMTP_PASS) return null;
+  const { address } = await dns.lookup(SMTP_HOST, { family: 4 });
   return nodemailer.createTransport({
-    host: 'smtp.gmail.com',
+    host: address,
     port: 587,
     secure: false,
-    family: 4,
+    tls: { servername: SMTP_HOST },
     auth: { user: SMTP_USER, pass: SMTP_PASS },
   });
 }
 
 async function send(to, subject, html) {
-  const t = getTransporter();
-  if (!t) return;
   try {
+    const t = await getTransporter();
+    if (!t) return;
     await t.sendMail({
       from: `"Løftebukk-booking 🔧" <${SMTP_USER}>`,
       to,
