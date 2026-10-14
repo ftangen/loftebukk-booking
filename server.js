@@ -241,7 +241,7 @@ cron.schedule('0 2 * * *', () => {
   }
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, '127.0.0.1', () => {
   console.log(`\n  Løftebukk-booking kjører:`);
   console.log(`  Brukersiden:  http://localhost:${PORT}`);
   console.log(`  Admin-panel:  http://localhost:${PORT}/admin.html`);
