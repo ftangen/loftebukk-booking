@@ -223,9 +223,18 @@
     });
   }
 
+  function toDateStr(d) { return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
+
   function bookingCard(b) {
-    const d = new Date(b.date + 'T12:00:00');
-    const dateStr = `${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    const fmt = ds => { const d = new Date(ds + 'T12:00:00'); return `${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`; };
+    const endDate = b.end_date || b.date;
+    const multiDay = endDate !== b.date;
+    const dateStr = multiDay ? `${fmt(b.date)} – ${fmt(endDate)}` : fmt(b.date);
+    const timeStr = multiDay ? `kl. ${b.start_time} første dag – kl. ${b.end_time} siste dag` : `${b.start_time} – ${b.end_time}`;
+    const thursdays = [];
+    for (let d = new Date(b.date + 'T12:00:00'); toDateStr(d) <= endDate; d.setDate(d.getDate() + 1)) {
+      if (d.getDay() === 4) thursdays.push(`${d.getDate()}. ${NO_MONTHS[d.getMonth()]}`);
+    }
     const createdAt = new Date(b.created_at).toLocaleString('no-NO', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' });
     const actionAt = b.action_at ? new Date(b.action_at).toLocaleString('no-NO', { day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit' }) : null;
 
@@ -271,12 +280,13 @@
 
         <div class="flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-500 mb-3">
           <span>📅 ${dateStr}</span>
-          <span>🕐 ${b.start_time} – ${b.end_time}</span>
+          <span>🕐 ${timeStr}</span>
           <span>📞 ${escHtml(b.phone)}</span>
           <span>✉️ ${escHtml(b.email || '—')}</span>
           <span class="text-slate-400 text-xs self-center">Sendt ${createdAt}</span>
         </div>
 
+        ${thursdays.length ? `<div class="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 text-sm text-amber-800 font-medium mb-2">⚠️ Går over torsdag (ungdomsklubb): ${thursdays.join(', ')}</div>` : ''}
         ${b.notes ? `<div class="bg-slate-50 rounded-xl px-3.5 py-2.5 text-sm text-slate-600 mb-2">💬 ${escHtml(b.notes)}</div>` : ''}
         ${b.rejection_reason ? `<div class="bg-red-50 rounded-xl px-3.5 py-2.5 text-sm text-red-700 mb-2">📝 Begrunnelse: ${escHtml(b.rejection_reason)}</div>` : ''}
         ${actionLine ? `<div class="mb-3">${actionLine}</div>` : ''}

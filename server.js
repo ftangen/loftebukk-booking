@@ -6,10 +6,14 @@ const cron = require('node-cron');
 const bcrypt = require('bcryptjs');
 const db = require('./db');
 const mailer = require('./mailer');
+const { daysBetween, dayOfWeek } = require('./dates');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_RE = /^([01]\d|2[0-4]):00$/;
+const MAX_BOOKING_DAYS = 31;
 
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -27,6 +31,7 @@ app.get('/api/bookings', (_req, res) => {
 
 app.post('/api/bookings', async (req, res) => {
   const { name, phone, email, license_plate, date, start_time, end_time, notes } = req.body;
+  const end_date = req.body.end_date || date;
 
   if (!name?.trim() || !phone?.trim() || !email?.trim() || !license_plate?.trim() || !date || !start_time || !end_time || !notes?.trim()) {
     return res.status(400).json({ error: 'Alle obligatoriske felt må fylles ut.' });
@@ -34,20 +39,26 @@ app.post('/api/bookings', async (req, res) => {
   if (!EMAIL_RE.test(email)) {
     return res.status(400).json({ error: 'Ugyldig e-postadresse.' });
   }
-  const dayOfWeek = new Date(date + 'T12:00:00').getDay();
-  if (dayOfWeek === 4) {
-    return res.status(400).json({ error: 'Torsdager er reservert for ungdomsklubben og kan ikke bookes.' });
+  if (!DATE_RE.test(date) || !DATE_RE.test(end_date) || !TIME_RE.test(start_time) || !TIME_RE.test(end_time)) {
+    return res.status(400).json({ error: 'Ugyldig dato eller klokkeslett.' });
   }
-  if (start_time >= end_time) {
-    return res.status(400).json({ error: 'Sluttid må være etter starttid.' });
+  // Flerdagersbookinger kan gå over en torsdag (admin avgjør), men ikke starte eller slutte på en
+  if (dayOfWeek(date) === 4 || dayOfWeek(end_date) === 4) {
+    return res.status(400).json({ error: 'Torsdager er reservert for ungdomsklubben – bookingen kan ikke starte eller slutte på en torsdag.' });
   }
-  if (db.checkConflict(date, start_time, end_time)) {
+  if (`${date}T${start_time}` >= `${end_date}T${end_time}`) {
+    return res.status(400).json({ error: 'Slutt må være etter start.' });
+  }
+  if (daysBetween(date, end_date) > MAX_BOOKING_DAYS) {
+    return res.status(400).json({ error: `En booking kan vare maks ${MAX_BOOKING_DAYS} dager.` });
+  }
+  if (db.checkConflict(date, start_time, end_date, end_time)) {
     return res.status(409).json({ error: 'Løftebukken er allerede booket i dette tidsrommet. Velg en annen tid.' });
   }
 
   const booking = db.createBooking({
     name: name.trim(), phone: phone.trim(), email: email.trim().toLowerCase(),
-    license_plate: license_plate.trim().toUpperCase(), date, start_time, end_time, notes: notes.trim(),
+    license_plate: license_plate.trim().toUpperCase(), date, end_date, start_time, end_time, notes: notes.trim(),
   });
 
   mailer.notifyAdminNewBooking(booking, getAdminEmails());

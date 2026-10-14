@@ -1,5 +1,6 @@
 const dns = require('dns').promises;
 const nodemailer = require('nodemailer');
+const { endDate, isMultiDay, thursdaysInRange } = require('./dates');
 
 const SMTP_USER = process.env.SMTP_USER;
 const SMTP_PASS = process.env.SMTP_PASS;
@@ -12,6 +13,22 @@ const NO_DAYS   = ['søndag','mandag','tirsdag','onsdag','torsdag','fredag','lø
 function formatDate(dateStr) {
   const d = new Date(dateStr + 'T12:00:00');
   return `${NO_DAYS[d.getDay()]} ${d.getDate()}. ${NO_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function formatPeriodDate(b) {
+  return isMultiDay(b) ? `${formatDate(b.date)} – ${formatDate(endDate(b))}` : formatDate(b.date);
+}
+
+function formatPeriodTime(b) {
+  return isMultiDay(b)
+    ? `kl. ${esc(b.start_time)} første dag – kl. ${esc(b.end_time)} siste dag`
+    : `${esc(b.start_time)} – ${esc(b.end_time)}`;
+}
+
+function thursdayWarningRow(b) {
+  const thursdays = thursdaysInRange(b.date, endDate(b));
+  if (!thursdays.length) return '';
+  return `<tr><td style="padding:7px 0;color:#b45309;">Obs</td><td style="padding:7px 0;color:#b45309;font-weight:700;">⚠️ Går over torsdag (ungdomsklubb): ${thursdays.map(formatDate).join(', ')}</td></tr>`;
 }
 
 const SMTP_HOST = 'smtp.gmail.com';
@@ -69,7 +86,7 @@ const FOOTER_HTML = `
 async function notifyAdminNewBooking(booking, adminEmails) {
   const to = (adminEmails || [ADMIN_EMAIL]).filter(Boolean);
   if (!to.length) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     to.join(', '),
@@ -90,8 +107,9 @@ async function notifyAdminNewBooking(booking, adminEmails) {
         <tr><td style="padding:7px 0;color:#64748b;">Telefon</td>    <td style="padding:7px 0;">${esc(booking.phone)}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">E-post</td>     <td style="padding:7px 0;">${esc(booking.email)}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">Dato</td>       <td style="padding:7px 0;font-weight:700;">${dateStr}</td></tr>
-        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>        <td style="padding:7px 0;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>        <td style="padding:7px 0;">${formatPeriodTime(booking)}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">Skiltnummer</td><td style="padding:7px 0;font-family:monospace;font-weight:700;letter-spacing:.06em;">${esc(booking.license_plate)}</td></tr>
+        ${thursdayWarningRow(booking)}
       </table>
 
       <div style="margin:16px 0 20px;padding:12px 16px;background:#f8fafc;border-radius:8px;border-left:3px solid #1d4ed8;">
@@ -112,7 +130,7 @@ async function notifyAdminNewBooking(booking, adminEmails) {
 // ── E-post til frivillig: booking mottatt (venter godkjenning) ──
 async function notifyVolunteerSubmitted(booking) {
   if (!booking.email) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     booking.email,
@@ -134,7 +152,7 @@ async function notifyVolunteerSubmitted(booking) {
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;margin-bottom:4px;">
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
           <tr><td style="padding:5px 0;color:#1e40af;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
-          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${formatPeriodTime(booking)}</td></tr>
           <tr><td style="padding:5px 0;color:#1e40af;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
           <tr><td style="padding:5px 0;color:#1e40af;">Hva</td>   <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
         </table>
@@ -156,7 +174,7 @@ async function notifyVolunteerSubmitted(booking) {
 // ── E-post til frivillig: godkjent ────────────────────
 async function notifyVolunteerApproved(booking) {
   if (!booking.email) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     booking.email,
@@ -178,7 +196,7 @@ async function notifyVolunteerApproved(booking) {
       <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:16px 20px;">
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
           <tr><td style="padding:5px 0;color:#166534;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
-          <tr><td style="padding:5px 0;color:#166534;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#166534;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${formatPeriodTime(booking)}</td></tr>
           <tr><td style="padding:5px 0;color:#166534;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
           <tr><td style="padding:5px 0;color:#166534;">Hva</td>   <td style="padding:5px 0;">${esc(booking.notes)}</td></tr>
         </table>
@@ -195,7 +213,7 @@ async function notifyVolunteerApproved(booking) {
 // ── E-post til frivillig: avvist ──────────────────────
 async function notifyVolunteerRejected(booking) {
   if (!booking.email) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     booking.email,
@@ -215,7 +233,7 @@ async function notifyVolunteerRejected(booking) {
       Dessverre kunne ikke bookingen din godkjennes denne gangen.</p>
 
       <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:14px;color:#7f1d1d;">
-        <strong>${dateStr}</strong>, ${esc(booking.start_time)} – ${esc(booking.end_time)}
+        <strong>${dateStr}</strong>, ${formatPeriodTime(booking)}
       </div>
 
       ${booking.rejection_reason ? `
@@ -238,7 +256,7 @@ async function notifyVolunteerRejected(booking) {
 // ── E-post til frivillig: påminnelse dagen før ────────
 async function notifyVolunteerReminder(booking) {
   if (!booking.email) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     booking.email,
@@ -260,7 +278,7 @@ async function notifyVolunteerReminder(booking) {
       <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:10px;padding:16px 20px;">
         <table style="width:100%;border-collapse:collapse;font-size:14px;">
           <tr><td style="padding:5px 0;color:#1e40af;width:110px;">Dato</td>  <td style="padding:5px 0;font-weight:700;">${dateStr}</td></tr>
-          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+          <tr><td style="padding:5px 0;color:#1e40af;">Tid</td>   <td style="padding:5px 0;font-weight:700;">${formatPeriodTime(booking)}</td></tr>
           <tr><td style="padding:5px 0;color:#1e40af;">Bil</td>   <td style="padding:5px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
         </table>
       </div>
@@ -282,7 +300,7 @@ async function notifyVolunteerReminder(booking) {
 async function notifyAdminBookingCancelled(booking, adminEmails) {
   const to = (adminEmails || [ADMIN_EMAIL]).filter(Boolean);
   if (!to.length) return;
-  const dateStr = formatDate(booking.date);
+  const dateStr = formatPeriodDate(booking);
 
   await send(
     to.join(', '),
@@ -304,7 +322,7 @@ async function notifyAdminBookingCancelled(booking, adminEmails) {
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <tr><td style="padding:7px 0;color:#64748b;width:110px;">Navn</td>   <td style="padding:7px 0;font-weight:700;">${esc(booking.name)}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">Dato</td>               <td style="padding:7px 0;font-weight:700;">${dateStr}</td></tr>
-        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>                <td style="padding:7px 0;">${esc(booking.start_time)} – ${esc(booking.end_time)}</td></tr>
+        <tr><td style="padding:7px 0;color:#64748b;">Tid</td>                <td style="padding:7px 0;">${formatPeriodTime(booking)}</td></tr>
         <tr><td style="padding:7px 0;color:#64748b;">Skiltnummer</td>        <td style="padding:7px 0;font-family:monospace;font-weight:700;">${esc(booking.license_plate)}</td></tr>
       </table>
     </div>

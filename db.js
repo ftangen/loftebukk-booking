@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const { endDate, bookingHours } = require('./dates');
 
 const dataDir = path.join(__dirname, 'data');
 const dbFile = path.join(dataDir, 'bookings.json');
@@ -73,7 +74,7 @@ function getPublicBookings() {
   const { bookings } = readDb();
   return bookings
     .filter(b => b.status === 'approved' || b.status === 'pending')
-    .map(({ id, name, date, start_time, end_time, status }) => ({ id, name, date, start_time, end_time, status }))
+    .map(({ id, name, date, end_date, start_time, end_time, status }) => ({ id, name, date, end_date: end_date || date, start_time, end_time, status }))
     .sort((a, b) => a.date.localeCompare(b.date) || a.start_time.localeCompare(b.start_time));
 }
 
@@ -82,11 +83,11 @@ function getAllBookings() {
   return [...bookings].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 }
 
-function createBooking({ name, phone, email, license_plate, date, start_time, end_time, notes }) {
+function createBooking({ name, phone, email, license_plate, date, end_date, start_time, end_time, notes }) {
   const db = readDb();
   const booking = {
     id: db.nextId++,
-    name, phone, email, license_plate, date, start_time, end_time,
+    name, phone, email, license_plate, date, end_date: end_date || date, start_time, end_time,
     notes: notes || '',
     status: 'pending',
     cancel_token: crypto.randomBytes(24).toString('hex'),
@@ -97,14 +98,16 @@ function createBooking({ name, phone, email, license_plate, date, start_time, en
   return booking;
 }
 
-function checkConflict(date, start_time, end_time, excludeId = null) {
+// Sammenligner "YYYY-MM-DDTHH:MM"-strenger, så bookinger over flere døgn håndteres likt
+function checkConflict(date, start_time, end_date, end_time, excludeId = null) {
   const { bookings } = readDb();
+  const start = `${date}T${start_time}`;
+  const end = `${end_date}T${end_time}`;
   return bookings.find(b =>
     b.status === 'approved' &&
-    b.date === date &&
     b.id !== excludeId &&
-    b.start_time < end_time &&
-    b.end_time > start_time
+    `${b.date}T${b.start_time}` < end &&
+    `${endDate(b)}T${b.end_time}` > start
   ) || null;
 }
 
@@ -158,7 +161,7 @@ function getStats() {
   const { bookings } = readDb();
 
   const byStatus = s => bookings.filter(b => b.status === s);
-  const hours = list => list.reduce((sum, b) => sum + (parseInt(b.end_time) - parseInt(b.start_time)), 0);
+  const hours = list => list.reduce((sum, b) => sum + bookingHours(b), 0);
 
   const approved = byStatus('approved');
   const now = new Date();

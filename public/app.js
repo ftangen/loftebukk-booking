@@ -30,6 +30,10 @@
   const timeBarTicks = document.getElementById('time-bar-ticks');
   const fStart = document.getElementById('f-start');
   const fEnd = document.getElementById('f-end');
+  const fStartDate = document.getElementById('f-start-date');
+  const fEndDate = document.getElementById('f-end-date');
+  const thursdayWarning = document.getElementById('thursday-warning');
+  const MAX_BOOKING_DAYS = 31;
 
   // ── API ──────────────────────────────────────────────
   async function loadBookings() {
@@ -97,21 +101,59 @@
   }
 
   function getDateStatus(dateStr) {
-    const day = publicBookings.filter(b => b.date === dateStr);
+    const day = publicBookings.filter(b => coversDate(b, dateStr));
     const approved = day.filter(b => b.status === 'approved');
-    const bookedHours = countBookedHours(approved);
+    const bookedHours = countBookedHours(approved, dateStr);
     if (bookedHours >= HOURS_END - HOURS_START) return 'full';
     if (bookedHours > 0) return 'partial';
     if (day.some(b => b.status === 'pending')) return 'pending-only';
     return 'available';
   }
 
-  function countBookedHours(bookings) {
+  function countBookedHours(bookings, dateStr) {
     const booked = new Set();
     for (const b of bookings) {
-      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) booked.add(h);
+      const [from, to] = hoursOnDate(b, dateStr);
+      for (let h = from; h < to; h++) booked.add(h);
     }
     return booked.size;
+  }
+
+  // ── Bookinger over flere døgn ────────────────────────
+  function endDateOf(b) { return b.end_date || b.date; }
+  function isMultiDay(b) { return endDateOf(b) !== b.date; }
+  function coversDate(b, dateStr) { return b.date <= dateStr && dateStr <= endDateOf(b); }
+
+  // Timene [fra, til) bookingen bruker på en gitt dag
+  function hoursOnDate(b, dateStr) {
+    const from = b.date === dateStr ? parseInt(b.start_time) : HOURS_START;
+    const to = endDateOf(b) === dateStr ? parseInt(b.end_time) : HOURS_END;
+    return [from, to];
+  }
+
+  function shortDate(dateStr) {
+    const d = new Date(dateStr + 'T12:00:00');
+    return `${d.getDate()}. ${NO_MONTHS[d.getMonth()].slice(0, 3)}`;
+  }
+
+  function periodLabel(b) {
+    return isMultiDay(b)
+      ? `${shortDate(b.date)} ${b.start_time} – ${shortDate(endDateOf(b))} ${b.end_time}`
+      : `${b.start_time} – ${b.end_time}`;
+  }
+
+  function addDays(dateStr, n) {
+    const d = new Date(dateStr + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return toDateStr(d);
+  }
+
+  function isThursday(dateStr) { return !!dateStr && new Date(dateStr + 'T12:00:00').getDay() === 4; }
+
+  function thursdaysInRange(from, to) {
+    const out = [];
+    for (let d = from; d <= to; d = addDays(d, 1)) if (isThursday(d)) out.push(d);
+    return out;
   }
 
   // ── Day detail ───────────────────────────────────────
@@ -122,8 +164,9 @@
     const dowIdx = (dateObj.getDay() + 6) % 7;
     detailTitle.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
-    const dayApproved = publicBookings.filter(b => b.date === dateStr && b.status === 'approved').sort((a, b) => a.start_time.localeCompare(b.start_time));
-    const dayPending  = publicBookings.filter(b => b.date === dateStr && b.status === 'pending').sort((a, b) => a.start_time.localeCompare(b.start_time));
+    const byStart = (a, b) => `${a.date}T${a.start_time}`.localeCompare(`${b.date}T${b.start_time}`);
+    const dayApproved = publicBookings.filter(b => coversDate(b, dateStr) && b.status === 'approved').sort(byStart);
+    const dayPending  = publicBookings.filter(b => coversDate(b, dateStr) && b.status === 'pending').sort(byStart);
 
     if (!dayApproved.length && !dayPending.length) {
       detailBookings.innerHTML = `
@@ -133,13 +176,13 @@
     } else {
       const approvedHtml = dayApproved.map(b => `
         <div class="flex items-center gap-3 bg-blue-50 rounded-xl px-4 py-3 mb-2">
-          <span class="font-bold text-blue-700 text-sm whitespace-nowrap">${b.start_time} – ${b.end_time}</span>
+          <span class="font-bold text-blue-700 text-sm whitespace-nowrap">${periodLabel(b)}</span>
           <span class="text-slate-500 text-sm">${escHtml(b.name)}</span>
         </div>`).join('');
 
       const pendingHtml = dayPending.map(b => `
         <div class="flex items-center gap-3 bg-amber-50 border border-dashed border-amber-300 rounded-xl px-4 py-3 mb-2">
-          <span class="font-bold text-amber-700 text-sm whitespace-nowrap">${b.start_time} – ${b.end_time}</span>
+          <span class="font-bold text-amber-700 text-sm whitespace-nowrap">${periodLabel(b)}</span>
           <span class="text-slate-500 text-sm">${escHtml(b.name)}</span>
           <span class="ml-auto text-xs text-amber-600 font-semibold whitespace-nowrap">⏳ Venter</span>
         </div>`).join('');
@@ -153,7 +196,7 @@
                                  (dayPending.length  ? pendingHeader  + pendingHtml  : '');
     }
 
-    const bookedHours = countBookedHours(dayApproved);
+    const bookedHours = countBookedHours(dayApproved, dateStr);
     if (bookedHours >= HOURS_END - HOURS_START) {
       bookBtnWrap.innerHTML = `<p class="text-center text-red-600 text-sm font-medium mt-1">Løftebukken er fullt booket denne dagen.</p>`;
     } else {
@@ -177,31 +220,37 @@
     bookingDateInfo.textContent = `${cap(NO_DAYS_SHORT[dowIdx])}. ${dateObj.getDate()}. ${NO_MONTHS[dateObj.getMonth()]} ${dateObj.getFullYear()}`;
 
     if (dayApproved.length || dayPending.length) {
-      buildTimeBar(dayApproved, dayPending);
+      buildTimeBar(dayApproved, dayPending, dateStr);
       timeBarWrap.style.display = '';
     } else {
       timeBarWrap.style.display = 'none';
     }
 
-    populateTimeSelects(dayApproved);
     hideError();
     bookingForm.reset();
+    fStartDate.value = dateStr;
+    fEndDate.value = dateStr;
+    fEndDate.min = dateStr;
+    fEndDate.max = addDays(dateStr, MAX_BOOKING_DAYS);
+    populateTimeSelects();
     formView.classList.remove('hidden');
     successView.classList.add('hidden');
     modal.style.display = 'flex';
     setTimeout(() => document.getElementById('f-name').focus(), 250);
   }
 
-  function buildTimeBar(dayApproved, dayPending) {
+  function buildTimeBar(dayApproved, dayPending, dateStr) {
     timeBar.innerHTML = '';
     timeBarTicks.innerHTML = '';
     const approvedSet = new Set();
     const pendingSet  = new Set();
     for (const b of dayApproved) {
-      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) approvedSet.add(h);
+      const [from, to] = hoursOnDate(b, dateStr);
+      for (let h = from; h < to; h++) approvedSet.add(h);
     }
     for (const b of dayPending) {
-      for (let h = parseInt(b.start_time); h < parseInt(b.end_time); h++) pendingSet.add(h);
+      const [from, to] = hoursOnDate(b, dateStr);
+      for (let h = from; h < to; h++) pendingSet.add(h);
     }
     for (let h = HOURS_START; h < HOURS_END; h++) {
       const cls = approvedSet.has(h) ? 'booked' : pendingSet.has(h) ? 'pending' : 'free';
@@ -219,16 +268,34 @@
     }
   }
 
-  function populateTimeSelects(dayBookings) {
+  function populateTimeSelects() {
     fStart.innerHTML = HOURS.map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`).join('');
     updateEndSelect();
     fStart.onchange = updateEndSelect;
+    fEndDate.onchange = updateEndSelect;
 
+    // Samme dag: sluttid etter starttid. Senere dag: alle timer 01–24.
     function updateEndSelect() {
       const startH = parseInt(fStart.value);
-      fEnd.innerHTML = HOURS.filter(h => h > startH).map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`).join('');
-      if (fEnd.options.length) fEnd.value = `${pad(Math.min(startH + 2, HOURS_END))}:00`;
+      const sameDay = !fEndDate.value || fEndDate.value <= fStartDate.value;
+      const prev = fEnd.value;
+      const endHours = [];
+      for (let h = sameDay ? startH + 1 : 1; h <= HOURS_END; h++) endHours.push(h);
+      fEnd.innerHTML = endHours.map(h => `<option value="${pad(h)}:00">${pad(h)}:00</option>`).join('');
+      if (!sameDay && prev && endHours.includes(parseInt(prev))) fEnd.value = prev;
+      else if (fEnd.options.length) fEnd.value = `${pad(Math.min(startH + 2, HOURS_END))}:00`;
+      updateThursdayWarning();
     }
+  }
+
+  function updateThursdayWarning() {
+    const thursdays = fEndDate.value > fStartDate.value ? thursdaysInRange(fStartDate.value, fEndDate.value) : [];
+    if (!thursdays.length || isThursday(fEndDate.value)) {
+      thursdayWarning.classList.add('hidden');
+      return;
+    }
+    thursdayWarning.textContent = `⚠️ Bookingen går over torsdag ${thursdays.map(shortDate).join(', ')}, som er ungdomsklubbens dag. Admin avgjør om det går greit.`;
+    thursdayWarning.classList.remove('hidden');
   }
 
   document.getElementById('close-modal').addEventListener('click', closeModal);
@@ -246,12 +313,25 @@
     const phone = document.getElementById('f-phone').value.trim();
     const email = document.getElementById('f-email').value.trim();
     const plate = document.getElementById('f-plate').value.trim().toUpperCase();
+    const endDate = fEndDate.value;
     const startTime = fStart.value;
     const endTime = fEnd.value;
     const notes = document.getElementById('f-notes').value.trim();
 
-    if (!name || !phone || !email || !plate || !startTime || !endTime || !notes) {
+    if (!name || !phone || !email || !plate || !endDate || !startTime || !endTime || !notes) {
       showError('Alle felt merket med * må fylles ut.');
+      return;
+    }
+    if (endDate < selectedDate) {
+      showError('Til-dato kan ikke være før fra-dato.');
+      return;
+    }
+    if (endDate > addDays(selectedDate, MAX_BOOKING_DAYS)) {
+      showError(`En booking kan vare maks ${MAX_BOOKING_DAYS} dager.`);
+      return;
+    }
+    if (isThursday(endDate)) {
+      showError('Torsdager er reservert for ungdomsklubben – bookingen kan ikke slutte på en torsdag.');
       return;
     }
     if (phone.replace(/\D/g, '').length < 8) {
@@ -271,7 +351,7 @@
       const res = await fetch('/api/bookings', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, phone, email, license_plate: plate, date: selectedDate, start_time: startTime, end_time: endTime, notes }),
+        body: JSON.stringify({ name, phone, email, license_plate: plate, date: selectedDate, end_date: endDate, start_time: startTime, end_time: endTime, notes }),
       });
       const data = await res.json();
       if (!res.ok) {

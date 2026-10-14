@@ -9,7 +9,8 @@ Booking-system for løftebukk på mekkeklubben — bygget for frivillige som vil
 - Torsdager blokkert automatisk (reservert for ungdomsklubben)
 - Bookingskjema krever navn, telefonnummer, e-post, skiltnummer, tidspunkt og hva som skal gjøres
 - Ventende bookinger vises i kalenderen med stiplet kantlinje
-- Konfliktsjekk hindrer dobbeltbooking av godkjente tider
+- Bookinger over flere døgn (fra dato/kl. til dato/kl., maks 31 dager) — kan gå over en torsdag med advarsel, men ikke starte eller slutte på en
+- Konfliktsjekk hindrer dobbeltbooking av godkjente tider, også over flere døgn
 - Ordensregler tilgjengelig som sammenleggbar boks
 
 **Admin-panel:**
